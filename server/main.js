@@ -6,7 +6,11 @@ require('dotenv').config({ quiet: true });
 
 // Loads the database connection pool and the auth router
 const pool = require("./database");
-const { createAuthRouter } = require("./auth");
+const { createAuthMiddleware, createAuthRouter } = require("./auth");
+const { ProjectsManager } = require("./managers/projects");
+const { UsersManager } = require("./managers/users");
+const { DiscussionsManager } = require("./managers/discussions");
+const { NewsManager } = require("./managers/news");
 
 
 const app = express();
@@ -14,14 +18,7 @@ const app = express();
 app.use(cors({origin: process.env.CLIENT_ORIGIN || false, credentials: true,}));
 app.use(express.json());
 app.use("/auth", createAuthRouter(pool));
-
-app.use((error, request, response, next) => {
-    console.error(error);
-
-    if (response.headersSent) return next(error);
-    response.status(500).json({ error: "Internal server error" });
-});
-
+app.use("/api", createAuthMiddleware(pool));
 
 // Serve static files from the client directory
 if(process.env.SHOULD_SERVE_WEB) {
@@ -29,10 +26,19 @@ if(process.env.SHOULD_SERVE_WEB) {
 }
 
 
-router.use("/api/projects",   new ProjectsManager(pool).createRouter());
-router.use("/api/users",      new UsersManager(pool).createRouter());
-router.use("/api/discussions",new DiscussionsManager(pool).createRouter());
-router.use("/api/news",       new NewsManager(pool).createRouter());
+const router = express.Router();
+router.use("/projects",    new ProjectsManager(pool).createRouter());
+router.use("/users",       new UsersManager(pool).createRouter());
+router.use("/discussions", new DiscussionsManager(pool).createRouter());
+router.use("/news",        new NewsManager(pool).createRouter());
+app.use("/api", router);
+
+app.use((error, request, response, next) => {
+    console.error(error);
+
+    if (response.headersSent) return next(error);
+    response.status(500).json({ error: "Internal server error" });
+});
 
 
 app.listen(process.env.PORT, process.env.HOST, () => {

@@ -218,7 +218,10 @@ class DiscussionsRouter {
 
         router.post("/create", async (req, res) => {
             try {
-                res.status(201).json(await discussionsManager.createDiscussion(req.body));
+                res.status(201).json(await discussionsManager.createDiscussion({
+                    ...req.body,
+                    owner: req.user.username,
+                }));
             } catch (error) {
                 console.error("Error creating discussion:", error);
                 res.status(400).json({ error: error.message });
@@ -268,6 +271,7 @@ class DiscussionsRouter {
                 res.status(201).json(await discussionsManager.createMessage({
                     ...req.body,
                     discussion_id: req.params.id,
+                    author: req.user.username,
                 }));
             } catch (error) {
                 console.error(`Error creating message for discussion ${req.params.id}:`, error);

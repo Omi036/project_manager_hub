@@ -122,6 +122,34 @@ async function findOrCreateUser(connection, discordUser) {
     throw new Error("Unable to allocate a unique username for the Discord user");
 }
 
+async function getAuthenticatedUser(pool, request) {
+    const sessionToken = parseCookies(request)[SESSION_COOKIE];
+    if (!sessionToken) return null;
+
+    const [rows] = await pool.execute(
+        `SELECT u.username, u.nick, u.role, u.discord_id, u.avatar_url, u.created_at
+            FROM sessions s JOIN users u ON u.username = s.username
+            WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP()`,
+        [hashToken(sessionToken)],
+    );
+
+    return rows[0] || null;
+}
+
+function createAuthMiddleware(pool) {
+    return async (request, response, next) => {
+        try {
+            const user = await getAuthenticatedUser(pool, request);
+            if (!user) return response.status(401).json({ error: "Authentication required" });
+
+            request.user = user;
+            return next();
+        } catch (error) {
+            return next(error);
+        }
+    };
+}
+
 // Exchanges the Discord OAuth code for an access token
 async function exchangeCode(code) {
     const body = new URLSearchParams({
@@ -242,16 +270,9 @@ function createAuthRouter(pool) {
     // Route for retrieving the current authenticated user's information
     router.get("/me", async (request, response, next) => {
         try {
-            const sessionToken = parseCookies(request)[SESSION_COOKIE];
-            if (!sessionToken) return response.status(401).json({ error: "Authentication required" });
-            const [rows] = await pool.execute(
-                `SELECT u.username, u.nick, u.role, u.discord_id, u.avatar_url, u.created_at
-                    FROM sessions s JOIN users u ON u.username = s.username
-                    WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP()`,
-                [hashToken(sessionToken)],
-            );
-            if (!rows.length) return response.status(401).json({ error: "Authentication required" });
-            return response.json({ user: rows[0] });
+            const user = await getAuthenticatedUser(pool, request);
+            if (!user) return response.status(401).json({ error: "Authentication required" });
+            return response.json({ user });
         } catch (error) {
             return next(error);
         }
@@ -274,4 +295,4 @@ function createAuthRouter(pool) {
     return router;
 }
 
-module.exports = { createAuthRouter };
+module.exports = { createAuthMiddleware, createAuthRouter };

@@ -483,7 +483,10 @@ class ProjectsRouter {
 
         router.post("/create", async (req, res) => {
             try {
-                const newProject = await projectsManager.createProject(req.body);
+                const newProject = await projectsManager.createProject({
+                    ...req.body,
+                    created_by: req.user.username,
+                });
                 res.status(201).json(newProject);
             } catch (error) {
                 console.error("Error creating project:", error);

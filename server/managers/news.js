@@ -150,7 +150,10 @@ class NewsRouter {
 
         router.post("/create", async (req, res) => {
             try {
-                res.status(201).json(await newsManager.createNews(req.body));
+                res.status(201).json(await newsManager.createNews({
+                    ...req.body,
+                    created_by: req.user.username,
+                }));
             } catch (error) {
                 console.error("Error creating news:", error);
                 res.status(400).json({ error: error.message });
