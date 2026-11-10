@@ -1,12 +1,13 @@
 class User {
     constructor(usersManager, {
-        username, nick, role, discord_id, created_at,
+        username, nick, role, discord_id, avatar_url, created_at,
     }) {
         this.usersManager = usersManager;
         this.username = username;
         this.nick = nick;
         this.role = role;
         this.discord_id = discord_id;
+        this.avatar_url = avatar_url;
         this.created_at = created_at;
     }
 
@@ -26,7 +27,7 @@ class UsersManager {
 
     async getUsers() {
         const [rows] = await this.db.query(`
-            SELECT username, nick, role, discord_id, created_at
+            SELECT username, nick, role, discord_id, avatar_url, created_at
             FROM users
             ORDER BY nick
         `);
@@ -35,20 +36,21 @@ class UsersManager {
 
     async createUser(userData) {
         await this.db.query(`
-            INSERT INTO users (username, nick, role, discord_id)
-            VALUES (?, ?, COALESCE(?, 'member'), ?)
+            INSERT INTO users (username, nick, role, discord_id, avatar_url)
+            VALUES (?, ?, COALESCE(?, 'member'), ?, ?)
         `, [
             userData.username,
             userData.nick,
             userData.role,
             userData.discord_id ?? userData.discordId ?? null,
+            userData.avatar_url ?? userData.avatarUrl ?? null,
         ]);
         return this.findUserByUsername(userData.username);
     }
 
     async findUserByUsername(username) {
         const [rows] = await this.db.query(`
-            SELECT username, nick, role, discord_id, created_at
+            SELECT username, nick, role, discord_id, avatar_url, created_at
             FROM users
             WHERE username = ?
         `, [username]);
@@ -60,6 +62,7 @@ class UsersManager {
             nick: updatedData.nick,
             role: updatedData.role,
             discord_id: updatedData.discord_id ?? updatedData.discordId,
+            avatar_url: updatedData.avatar_url ?? updatedData.avatarUrl,
         }).filter(([, value]) => value !== undefined);
 
         if (!fields.length) return this.findUserByUsername(username);

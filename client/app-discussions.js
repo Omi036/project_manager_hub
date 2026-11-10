@@ -173,19 +173,19 @@ function discPanel() {
 // Carga y renderiza la vista de discusión según el hash de la URL, mostrando el hilo seleccionado o la lista de discusiones.
 function renderChat(discussion) {
     const msgs =discussion.messages
-        .map((message) =>`
+        .map((message) => {
+            const user = resolveUser(message.author);
+            return `
         <div class="msg">
-            <div class="avatar sm${resolveUser(message.author).username === API.ME ? "" : " oth"}" aria-hidden="true">
-                ${esc(initials(resolveUser(message.author).nick))}
-            </div>
+            ${avatarMarkup(user, `sm${user.username === API.ME ? "" : " oth"}`)}
             <div class="mb">
 
                 <div class="mh">
-                    <b>${esc(resolveUser(message.author).nick)}</b>
-                    <span class="muted">@${esc(resolveUser(message.author).username)}
+                    <b>${esc(user.nick)}</b>
+                    <span class="muted">@${esc(user.username)}
                     </span>
 
-                    ${resolveUser(message.author).username === resolveUser(discussion.owner).username ? '<span class="op">OP</span>' : ""}
+                    ${user.username === resolveUser(discussion.owner).username ? '<span class="op">OP</span>' : ""}
 
                     <span class="muted">${fmtMsg(message.date)}</span>
                 </div>
@@ -194,8 +194,9 @@ function renderChat(discussion) {
                     ${parseMentions(MarkdownRenderer.render(message.text, true))}
                 </div>
             </div>
-        </div>`,
-        ).join("") || '<p class="muted">Aún no hay mensajes. Escribe el primero.</p>';
+        </div>`;
+        })
+        .join("") || '<p class="muted">Aún no hay mensajes. Escribe el primero.</p>';
 
 
     app.innerHTML = `
@@ -484,7 +485,12 @@ user_menu.addEventListener("click", (event) => {
     setMenu(false);
 
     if (menuButton.dataset.nav) location.hash = menuButton.dataset.nav;
-    if (menuButton.dataset.logout) API.logout().then(() => render());
+    if (menuButton.dataset.logout) {
+        API.logout().then(() => {
+            updateCurrentUserAvatar();
+            render();
+        });
+    }
     if (menuButton.dataset.loginDiscord !== undefined) API.loginWithDiscord();
     if (menuButton.dataset.openSettings !== undefined) openSettings();
 });

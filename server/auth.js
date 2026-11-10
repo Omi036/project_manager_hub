@@ -64,23 +64,28 @@ function usernameBase(discordUser) {
     return (normalized || `discord_${discordUser.id}`).slice(0, 50);
 }
 
+function avatarUrl(discordUser) {
+    if (!discordUser.avatar) return null;
+    return `https://cdn.discordapp.com/avatars/${encodeURIComponent(discordUser.id)}/${encodeURIComponent(discordUser.avatar)}.png?size=128`;
+}
 
 async function findOrCreateUser(connection, discordUser) {
     const [existingRows] = await connection.execute(
-        "SELECT username, nick, role, discord_id, created_at FROM users WHERE discord_id = ?",
+        "SELECT username, nick, role, discord_id, avatar_url, created_at FROM users WHERE discord_id = ?",
         [discordUser.id],
     );
 
     const nick = String(discordUser.global_name || discordUser.username).slice(0, 100);
+    const userAvatarUrl = avatarUrl(discordUser);
 
     // If a user already exists for this Discord ID, update their nick
     if (existingRows.length) {
         await connection.execute(
-            "UPDATE users SET nick = ? WHERE discord_id = ?",
-            [nick, discordUser.id],
+            "UPDATE users SET nick = ?, avatar_url = ? WHERE discord_id = ?",
+            [nick, userAvatarUrl, discordUser.id],
         );
         
-        return { ...existingRows[0], nick };
+        return { ...existingRows[0], nick, avatar_url: userAvatarUrl };
     }
 
     // If no user exists for this Discord ID, try to create a new one with a unique username
@@ -97,11 +102,17 @@ async function findOrCreateUser(connection, discordUser) {
         // If no entry exists for this username, create a new user and return it
         if (!rows.length) {
             await connection.execute(
-                "INSERT INTO users (username, nick, discord_id) VALUES (?, ?, ?)",
-                [username, nick, discordUser.id],
+                "INSERT INTO users (username, nick, discord_id, avatar_url) VALUES (?, ?, ?, ?)",
+                [username, nick, discordUser.id, userAvatarUrl],
             );
 
-            return {username, nick, role: "member", discord_id: discordUser.id};
+            return {
+                username,
+                nick,
+                role: "member",
+                discord_id: discordUser.id,
+                avatar_url: userAvatarUrl,
+            };
         }
 
         // If the username is taken, try a new one with a numeric suffix
@@ -234,7 +245,7 @@ function createAuthRouter(pool) {
             const sessionToken = parseCookies(request)[SESSION_COOKIE];
             if (!sessionToken) return response.status(401).json({ error: "Authentication required" });
             const [rows] = await pool.execute(
-                `SELECT u.username, u.nick, u.role, u.discord_id, u.created_at
+                `SELECT u.username, u.nick, u.role, u.discord_id, u.avatar_url, u.created_at
                     FROM sessions s JOIN users u ON u.username = s.username
                     WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP()`,
                 [hashToken(sessionToken)],

@@ -10,6 +10,38 @@ const esc = (text) =>
         (character) =>({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character],
     );
 
+const avatarUrl = (user) => {
+    const url = user?.avatar_url || user?.avatarUrl;
+    return typeof url === "string" && url.startsWith("https://cdn.discordapp.com/") ? url : null;
+};
+
+const userInitials = (name) =>
+    (name || "?")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase();
+
+const avatarMarkup = (user, className = "") => {
+    const imageUrl = avatarUrl(user);
+    const content = imageUrl
+        ? `<img src="${esc(imageUrl)}" alt="" loading="lazy">`
+        : esc(userInitials(user?.nick));
+    return `<div class="avatar ${className}">${content}</div>`;
+};
+
+const updateCurrentUserAvatar = () => {
+    const element = $("#current_user_avatar");
+    if (!element) return;
+    const user = API.currentUser();
+    const imageUrl = avatarUrl(user);
+    element.innerHTML = imageUrl
+        ? `<img src="${esc(imageUrl)}" alt="" loading="lazy">`
+        : esc(userInitials(user.nick));
+};
+
 // Genera un identificador único basado en la fecha y un número aleatorio.
 const uid = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 

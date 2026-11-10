@@ -186,7 +186,7 @@ class ProjectsManager {
     async getProjectOwner(username) {
         if (!username) return null;
         const [rows] = await this.db.query(
-            "SELECT username, nick, role, discord_id, created_at FROM users WHERE username = ?",
+            "SELECT username, nick, role, discord_id, avatar_url, created_at FROM users WHERE username = ?",
             [username],
         );
         return rows[0] || null;

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     role           VARCHAR(20) NOT NULL DEFAULT 'member'
                    CHECK (role IN ('member', 'admin')),
     discord_id     VARCHAR(100) UNIQUE,
+    avatar_url     VARCHAR(255),
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

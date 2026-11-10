@@ -660,5 +660,9 @@ window.addEventListener("hashchange", () => {
 
 
 // Renderiza la vista inicial de la aplicación al cargar la página
+updateCurrentUserAvatar();
 render();
-API.restoreSession().then(() => render());
+API.restoreSession().then(() => {
+    updateCurrentUserAvatar();
+    render();
+});
