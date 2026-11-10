@@ -86,6 +86,7 @@ function buildSampleDiscussions() {
 
 class API {
     static #me = "lucia_m";
+    static #authenticated = false;
     static #users = [
         { username: "lucia_m", nick: "Lucía Márquez" },
         { username: "andres_g", nick: "Andrés", role: "admin" },
@@ -104,6 +105,10 @@ class API {
 
     static get USERS() {
         return API.#users;
+    }
+
+    static get isAuthenticated() {
+        return API.#authenticated;
     }
 
     static set USERS(users) {
@@ -213,7 +218,10 @@ class API {
     static async restoreSession() {
         try {
             const response = await API.#authRequest("/auth/me");
-            if (!response.ok) return null;
+            if (!response.ok) {
+                API.#authenticated = false;
+                return null;
+            }
 
             const { user } = await response.json();
 
@@ -224,10 +232,12 @@ class API {
             ];
 
             API.ME = user.username;
+            API.#authenticated = true;
             return user;
 
         } catch (error) {
             console.error("No se pudo restaurar la sesión:", error);
+            API.#authenticated = false;
             return null;
         }
     }
@@ -270,6 +280,7 @@ class API {
             const response = await API.#authRequest("/auth/logout", { method: "POST" });
             if (!response.ok) throw new Error(`Logout failed (${response.status})`);
             API.ME = "lucia_m";
+            API.#authenticated = false;
             return { ok: true };
         } catch (error) {
             console.error("No se pudo cerrar la sesión:", error);

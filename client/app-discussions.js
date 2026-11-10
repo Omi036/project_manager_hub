@@ -13,6 +13,11 @@ const navToggle = $("#navigation_toggle_button");
 // Elementos del modal de usuario y botón de avatar
 const user_menu = $("#user_menu")
 const avatarButton = $("#user_avatar_button");
+const loginDiscordButton = user_menu.querySelector("[data-login-discord]");
+
+const updateLoginButton = () => {
+    loginDiscordButton.hidden = API.isAuthenticated;
+};
 
 
 // Convierte un nombre de usuario o nick en un objeto de usuario válido.
@@ -488,6 +493,7 @@ user_menu.addEventListener("click", (event) => {
     if (menuButton.dataset.logout) {
         API.logout().then(() => {
             updateCurrentUserAvatar();
+            updateLoginButton();
             render();
         });
     }
