@@ -7,6 +7,7 @@ require('dotenv').config({ quiet: true });
 // Loads the database connection pool and the auth router
 const pool = require("./database");
 const { createAuthRouter } = require("./auth");
+const { createModelRouter } = require("./router");
 
 
 const app = express();
@@ -14,6 +15,7 @@ const app = express();
 app.use(cors({origin: process.env.CLIENT_ORIGIN || false, credentials: true,}));
 app.use(express.json());
 app.use("/auth", createAuthRouter(pool));
+app.use("/api", createModelRouter(pool));
 
 app.use((error, request, response, next) => {
     console.error(error);

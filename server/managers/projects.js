@@ -16,33 +16,15 @@ class Project {
         this.created_by = created_by;
     }
 
-    getTags() {
-        return this.projectsManager.getProjectTags(this.id);
-    }
+    getTags() { return this.projectsManager.getProjectTags(this.id) }
+    getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
+    getFunding() { return this.projectsManager.getProjectFunding(this.id) }
+    getOwnerUser() { return this.projectsManager.getProjectOwner(this.owner_username)}
+    
+    userIsOwner(username) { return this.owner_username === username }
 
-    getCollaborators() {
-        return this.projectsManager.getProjectCollaborators(this.id);
-    }
-
-    getFunding() {
-        return this.projectsManager.getProjectFunding(this.id);
-    }
-
-    getOwnerUser() {
-        return this.projectsManager.getProjectOwner(this.owner_username);
-    }
-
-    userIsOwner(username) {
-        return this.owner_username === username;
-    }
-
-    update(updatedData) {
-        return this.projectsManager.updateProject(this.id, updatedData);
-    }
-
-    delete() {
-        return this.projectsManager.deleteProject(this.id);
-    }
+    update(updatedData) { return this.projectsManager.updateProject(this.id, updatedData) }
+    delete() { return this.projectsManager.deleteProject(this.id)}
 }
 
 

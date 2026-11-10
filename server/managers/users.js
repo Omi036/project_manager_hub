@@ -1,7 +1,5 @@
 class User {
-    constructor(usersManager, {
-        username, nick, role, discord_id, avatar_url, created_at,
-    }) {
+    constructor(usersManager, {username, nick, role, discord_id, avatar_url, created_at}) {
         this.usersManager = usersManager;
         this.username = username;
         this.nick = nick;
@@ -11,14 +9,10 @@ class User {
         this.created_at = created_at;
     }
 
-    update(updatedData) {
-        return this.usersManager.updateUser(this.username, updatedData);
-    }
-
-    delete() {
-        return this.usersManager.deleteUser(this.username);
-    }
+    update(updatedData) { return this.usersManager.updateUser(this.username, updatedData) }
+    delete() { return this.usersManager.deleteUser(this.username) }
 }
+
 
 class UsersManager {
     constructor(db) {

@@ -1,9 +1,7 @@
 const { randomUUID } = require("node:crypto");
 
 class News {
-    constructor(newsManager, {
-        id, title, description, banner, created_by, created_at,
-    }) {
+    constructor(newsManager, {id, title, description, banner, created_by, created_at}) {
         this.newsManager = newsManager;
         this.id = id;
         this.title = title;
@@ -13,13 +11,8 @@ class News {
         this.created_at = created_at;
     }
 
-    update(updatedData) {
-        return this.newsManager.updateNews(this.id, updatedData);
-    }
-
-    delete() {
-        return this.newsManager.deleteNews(this.id);
-    }
+    update(updatedData) { return this.newsManager.updateNews(this.id, updatedData) }
+    delete() { return this.newsManager.deleteNews(this.id) }
 }
 
 class NewsManager {

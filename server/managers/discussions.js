@@ -1,9 +1,7 @@
 const { randomUUID } = require("node:crypto");
 
 class DiscussionMessage {
-    constructor(discussionsManager, {
-        id, discussion_id, author, text, created_at,
-    }) {
+    constructor(discussionsManager, {id, discussion_id, author, text, created_at}) {
         this.discussionsManager = discussionsManager;
         this.id = id;
         this.discussion_id = discussion_id;
@@ -12,15 +10,11 @@ class DiscussionMessage {
         this.created_at = created_at;
     }
 
-    delete() {
-        return this.discussionsManager.deleteMessage(this.id);
-    }
+    delete() { return this.discussionsManager.deleteMessage(this.id) }
 }
 
 class Discussion {
-    constructor(discussionsManager, {
-        id, title, owner, created_at,
-    }) {
+    constructor(discussionsManager, { id, title, owner, created_at}) {
         this.discussionsManager = discussionsManager;
         this.id = id;
         this.title = title;
@@ -28,17 +22,10 @@ class Discussion {
         this.created_at = created_at;
     }
 
-    getMessages() {
-        return this.discussionsManager.getMessages(this.id);
-    }
+    getMessages() { return this.discussionsManager.getMessages(this.id) }
 
-    update(updatedData) {
-        return this.discussionsManager.updateDiscussion(this.id, updatedData);
-    }
-
-    delete() {
-        return this.discussionsManager.deleteDiscussion(this.id);
-    }
+    update(updatedData) { return this.discussionsManager.updateDiscussion(this.id, updatedData)}
+    delete() { return this.discussionsManager.deleteDiscussion(this.id) }
 }
 
 class DiscussionsManager {
