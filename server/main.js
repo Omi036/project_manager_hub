@@ -15,6 +15,13 @@ app.use(cors({origin: process.env.CLIENT_ORIGIN || false, credentials: true,}));
 app.use(express.json());
 app.use("/auth", createAuthRouter(pool));
 
+app.use((error, request, response, next) => {
+    console.error(error);
+
+    if (response.headersSent) return next(error);
+    response.status(500).json({ error: "Internal server error" });
+});
+
 
 // Serve static files from the client directory
 if(process.env.SHOULD_SERVE_WEB) {
@@ -22,13 +29,7 @@ if(process.env.SHOULD_SERVE_WEB) {
 }
 
 
-app.listen(process.env.PORT, () => {
-    console.log(`Server is running on port ${process.env.PORT}`);
-});
 
-
-app.use((error, request, response, next) => {
-    console.error(error);
-    if (response.headersSent) return next(error);
-    response.status(500).json({ error: "Internal server error" });
+app.listen(process.env.PORT, process.env.HOST, () => {
+    console.log(`Server is running on: http://${process.env.HOST}:${process.env.PORT}`);
 });

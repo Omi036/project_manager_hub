@@ -95,25 +95,15 @@ class API {
         { username: "pablo_ruiz", nick: "Pablo Ruiz" },
     ];
 
-    static get ME() {
-        return API.#me;
-    }
+    // Almacena los usuarios en memoria (suponemos que la aplicación no tiene muchos usuarios)
+    static get ME() { return API.#me }
+    static set ME(username) { API.#me = username }
 
-    static set ME(username) {
-        API.#me = username;
-    }
+    static get USERS() { return API.#users }
+    static set USERS(users) { API.#users = users }
 
-    static get USERS() {
-        return API.#users;
-    }
+    static get isAuthenticated() { return API.#authenticated }
 
-    static get isAuthenticated() {
-        return API.#authenticated;
-    }
-
-    static set USERS(users) {
-        API.#users = users;
-    }
 
     static currentUser() {
         return API.USERS.find((user) => user.username === API.ME) || {
@@ -128,6 +118,7 @@ class API {
         news: "gestor-noticias-v1",
         settings: "gestor-ajustes-v1",
     };
+
     static #projects = [];
     static #discussions = [];
     static #news = [];
@@ -174,7 +165,7 @@ class API {
         } catch (error) {}
     }
 
-    static #timestamp() {return new Date().toISOString();}
+    static #timestamp() { return new Date().toISOString() }
     static #legacySampleIds = ["p1demo", "p2demo", "d1demo", "n1demo"];
 
     static #replaceLegacySamples(stored, buildSamples) {
@@ -217,6 +208,7 @@ class API {
     // Restaura la sesión existente del servidor.
     static async restoreSession() {
         try {
+            // Intenta obtener la información del usuario autenticado desde el servidor.
             const response = await API.#authRequest("/auth/me");
             if (!response.ok) {
                 API.#authenticated = false;
@@ -276,11 +268,15 @@ class API {
 
     // Cierra la sesión en el servidor.
     static async logout() {
+        alert("Cerrando sesión...");
+
         try {
             const response = await API.#authRequest("/auth/logout", { method: "POST" });
             if (!response.ok) throw new Error(`Logout failed (${response.status})`);
+
             API.ME = "lucia_m";
             API.#authenticated = false;
+
             return { ok: true };
         } catch (error) {
             console.error("No se pudo cerrar la sesión:", error);

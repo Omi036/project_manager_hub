@@ -10,11 +10,14 @@ const esc = (text) =>
         (character) =>({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character],
     );
 
+// Obtiene la URL del avatar de un usuario, si existe y es válida.
 const avatarUrl = (user) => {
     const url = user?.avatar_url || user?.avatarUrl;
     return typeof url === "string" && url.startsWith("https://cdn.discordapp.com/") ? url : null;
 };
 
+
+// Genera las iniciales de un nombre de usuario
 const userInitials = (name) =>
     (name || "?")
         .split(/\s+/)
@@ -24,6 +27,8 @@ const userInitials = (name) =>
         .join("")
         .toUpperCase();
 
+
+// Genera el marcado HTML para un avatar de usuario
 const avatarMarkup = (user, className = "") => {
     const imageUrl = avatarUrl(user);
     const content = imageUrl
@@ -32,11 +37,15 @@ const avatarMarkup = (user, className = "") => {
     return `<div class="avatar ${className}">${content}</div>`;
 };
 
+
+// Actualiza el DOM del avatar del usuario actual en la interfaz de usuario.
 const updateCurrentUserAvatar = () => {
     const element = $("#current_user_avatar");
     if (!element) return;
+
     const user = API.currentUser();
     const imageUrl = avatarUrl(user);
+
     element.innerHTML = imageUrl
         ? `<img src="${esc(imageUrl)}" alt="" loading="lazy">`
         : esc(userInitials(user.nick));

@@ -15,9 +15,7 @@ const user_menu = $("#user_menu")
 const avatarButton = $("#user_avatar_button");
 const loginDiscordButton = user_menu.querySelector("[data-login-discord]");
 
-const updateLoginButton = () => {
-    loginDiscordButton.hidden = API.isAuthenticated;
-};
+const updateLoginButton = () => { loginDiscordButton.hidden = API.isAuthenticated};
 
 
 // Convierte un nombre de usuario o nick en un objeto de usuario válido.
@@ -490,11 +488,11 @@ user_menu.addEventListener("click", (event) => {
     setMenu(false);
 
     if (menuButton.dataset.nav) location.hash = menuButton.dataset.nav;
-    if (menuButton.dataset.logout) {
-        API.logout().then(() => {
-            updateCurrentUserAvatar();
-            updateLoginButton();
-            render();
+    if (menuButton.dataset.logout !== undefined) {
+        API.logout().then((result) => {
+            if (!result.ok) return;
+
+            location.replace(location.pathname);
         });
     }
     if (menuButton.dataset.loginDiscord !== undefined) API.loginWithDiscord();

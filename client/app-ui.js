@@ -188,6 +188,13 @@ let settings = API.getSettings();
 if (!ACCENTS[settings.accent]) settings.accent = "blue";
 
 
+// Recarga toda la interfaz
+function refreshUI() {
+    updateCurrentUserAvatar();
+    updateLoginButton();
+    render();
+};
+
 // Centraliza la aplicación visual de los ajustes para que los cambios
 // de tema y color se reflejen sin recargar la página.
 function applySettings() {
@@ -660,11 +667,5 @@ window.addEventListener("hashchange", () => {
 
 
 // Renderiza la vista inicial de la aplicación al cargar la página
-updateCurrentUserAvatar();
-updateLoginButton();
-render();
-API.restoreSession().then(() => {
-    updateCurrentUserAvatar();
-    updateLoginButton();
-    render();
-});
+refreshUI();
+API.restoreSession().then(refreshUI);
