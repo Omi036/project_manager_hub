@@ -10,6 +10,8 @@ function createModelRouter() {
     const usersManager = new UsersManager(pool);
     const discussionsManager = new DiscussionsManager(pool);
     const newsManager = new NewsManager(pool);
+
+    
     
     return router;
 }

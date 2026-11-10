@@ -21,7 +21,7 @@ class Project {
     getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
     getFunding() { return this.projectsManager.getProjectFunding(this.id) }
     getOwnerUser() { return this.projectsManager.getProjectOwner(this.owner_username)}
-    
+
     userIsOwner(username) { return this.owner_username === username }
 
     update(updatedData) { return this.projectsManager.updateProject(this.id, updatedData) }
@@ -47,33 +47,49 @@ class ProjectsManager {
 
     async createProject(projectData) {
         const id = projectData.id || randomUUID();
-        await this.db.query(`
-            INSERT INTO projects (
-                id, title, icon, icon_color, status, description,
-                tags, owner_name, owner_username, created_by
-            )
-            VALUES (?, ?, COALESCE(?, 'tabler:rocket'),
-                    COALESCE(?, '#2d4ca3'), COALESCE(?, 'Ideado'),
-                    COALESCE(?, ''), ?, ?, ?, ?)
-        `, [
-            id,
-            projectData.title,
-            projectData.icon,
-            projectData.icon_color ?? projectData.iconColor,
-            projectData.status,
-            projectData.description ?? projectData.desc,
-            this._serializeTags(projectData.tags),
-            projectData.owner_name ?? projectData.owner,
-            projectData.owner_username ?? null,
-            projectData.created_by ?? projectData.createdBy ?? null,
-        ]);
+        const title = this._requiredField(projectData.title, "title");
+        const description = this._requiredField(projectData.description ?? projectData.desc, "description");
+        const ownerName = this._requiredField(projectData.owner_name ?? projectData.owner, "owner_name");
+        const connection = await this.db.getConnection();
 
-        await this._replaceProjectRelations(id, projectData);
-        return this.findProjectById(id);
+        try {
+            await connection.beginTransaction();
+            await connection.query(`
+                INSERT INTO projects (
+                    id, title, icon, icon_color, status, description,
+                    tags, owner_name, owner_username, created_by
+                )
+                VALUES (?, ?, COALESCE(?, 'tabler:rocket'),
+                        COALESCE(?, '#2d4ca3'), COALESCE(?, 'Ideado'),
+                        COALESCE(?, ''), ?, ?, ?, ?)
+            `, [
+                id,
+                title,
+                projectData.icon ?? null,
+                projectData.icon_color ?? projectData.iconColor ?? null,
+                projectData.status ?? null,
+                description,
+                this._serializeTags(projectData.tags),
+                ownerName,
+                projectData.owner_username ?? null,
+                projectData.created_by ?? projectData.createdBy ?? null,
+            ]);
+
+            await this._replaceProjectRelations(id, projectData, connection);
+            await connection.commit();
+            return this.findProjectById(id, connection);
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+
+        } finally {
+            connection.release();
+        }
     }
 
-    async findProjectById(projectId) {
-        const [rows] = await this.db.query(`
+    async findProjectById(projectId, db = this.db) {
+        const [rows] = await db.query(`
             SELECT id, title, icon, icon_color, status, description,
                    tags, owner_name, owner_username, created_at, created_by
             FROM projects
@@ -90,44 +106,73 @@ class ProjectsManager {
             icon_color: updatedData.icon_color ?? updatedData.iconColor,
             status: updatedData.status,
             description: updatedData.description ?? updatedData.desc,
+            tags: updatedData.tags === undefined ? undefined : this._serializeTags(updatedData.tags),
             owner_name: updatedData.owner_name ?? updatedData.owner,
-            owner_username: updatedData.owner_username,
+            owner_username: updatedData.owner_username ?? updatedData.ownerUsername,
             created_by: updatedData.created_by ?? updatedData.createdBy,
         };
+
         const columnNames = {
             title: "title",
             icon: "icon",
             icon_color: "icon_color",
             status: "status",
             description: "description",
+            tags: "tags",
             owner_name: "owner_name",
             owner_username: "owner_username",
             created_by: "created_by",
         };
         const updates = Object.entries(fields).filter(([, value]) => value !== undefined);
-        let project;
 
-        if (updates.length) {
-            const values = updates.map(([, value]) => value);
-            const assignments = updates.map(([field]) => `${columnNames[field]} = ?`);
-            const [result] = await this.db.query(`
-                UPDATE projects
-                SET ${assignments.join(", ")}
-                WHERE id = ?
-            `, [...values, projectId]);
-            project = result.affectedRows ? await this.findProjectById(projectId) : null;
-        } else {
-            project = await this.findProjectById(projectId);
-        }
-
+        const project = await this.findProjectById(projectId);
         if (!project) return null;
-        await this._replaceProjectRelations(projectId, updatedData);
-        return this.findProjectById(projectId);
+
+        const connection = await this.db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+            if (updates.length) {
+                const values = updates.map(([, value]) => value);
+                const assignments = updates.map(([field]) => `${columnNames[field]} = ?`);
+                await connection.query(`
+                    UPDATE projects
+                    SET ${assignments.join(", ")}
+                    WHERE id = ?
+                `, [...values, projectId]);
+            }
+
+            await this._replaceProjectRelations(projectId, updatedData, connection);
+            await connection.commit();
+            return this.findProjectById(projectId, connection);
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+
+        } finally {
+            connection.release();
+        }
     }
 
     async deleteProject(projectId) {
-        const [result] = await this.db.query("DELETE FROM projects WHERE id = ?", [projectId]);
-        return result.affectedRows > 0;
+        const connection = await this.db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+            await connection.query("DELETE FROM project_collaborators WHERE project_id = ?", [projectId]);
+            await connection.query("DELETE FROM project_funding WHERE project_id = ?", [projectId]);
+            const [result] = await connection.query("DELETE FROM projects WHERE id = ?", [projectId]);
+            await connection.commit();
+            return result.affectedRows > 0;
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+
+        } finally {
+            connection.release();
+        }
     }
 
     async getProjectCollaborators(projectId) {
@@ -159,6 +204,7 @@ class ProjectsManager {
 
     async getProjectOwner(username) {
         if (!username) return null;
+
         const [rows] = await this.db.query(
             "SELECT username, nick, role, discord_id, avatar_url, created_at FROM users WHERE username = ?",
             [username],
@@ -166,21 +212,25 @@ class ProjectsManager {
         return rows[0] || null;
     }
 
-    async _replaceProjectRelations(projectId, projectData) {
-        if (projectData.tags !== undefined) {
-            await this.db.query(
-                "UPDATE projects SET tags = ? WHERE id = ?",
-                [this._serializeTags(projectData.tags), projectId],
-            );
-        }
 
+    // Updates the collaborators and funding relations for a project
+    async _replaceProjectRelations(projectId, projectData, db = this.db) {
+        // Handle collaborators
         if (projectData.collabs !== undefined || projectData.collaborators !== undefined) {
             const collaborators = projectData.collabs ?? projectData.collaborators ?? [];
-            await this.db.query("DELETE FROM project_collaborators WHERE project_id = ?", [projectId]);
+            if (!Array.isArray(collaborators)) {
+                throw new TypeError("Project collaborators must be an array");
+            }
+            
+
+            await db.query("DELETE FROM project_collaborators WHERE project_id = ?", [projectId]);
             for (const collaborator of collaborators) {
+                if (!collaborator || (typeof collaborator !== "string" && typeof collaborator.name !== "string")) {
+                    throw new TypeError("Each project collaborator must have a name");
+                }
                 const name = typeof collaborator === "string" ? collaborator : collaborator.name;
                 const username = typeof collaborator === "string" ? null : collaborator.username ?? null;
-                await this.db.query(
+                await db.query(
                     `INSERT INTO project_collaborators
                         (project_id, collaborator_name, collaborator_username)
                      VALUES (?, ?, ?)`,
@@ -189,10 +239,20 @@ class ProjectsManager {
             }
         }
 
+        // Handle funding
         if (projectData.funding !== undefined) {
-            await this.db.query("DELETE FROM project_funding WHERE project_id = ?", [projectId]);
-            for (const funding of projectData.funding || []) {
-                await this.db.query(
+            if (!Array.isArray(projectData.funding)) {
+                throw new TypeError("Project funding must be an array");
+            }
+
+
+            await db.query("DELETE FROM project_funding WHERE project_id = ?", [projectId]);
+            for (const funding of projectData.funding) {
+                if (!funding || typeof funding !== "object") {
+                    throw new TypeError("Each project funding entry must be an object");
+                }
+
+                await db.query(
                     `INSERT INTO project_funding
                         (project_id, contributor, contribution)
                      VALUES (?, ?, ?)`,
@@ -202,9 +262,19 @@ class ProjectsManager {
         }
     }
 
+
+    // Joins an array of tags into a comma-separated string
     _serializeTags(tags) {
         const values = Array.isArray(tags) ? tags : String(tags || "").split(",");
         return values.map((tag) => String(tag).trim()).filter(Boolean).join(", ");
+    }
+
+    // Validates that a required field is present and not null or undefined
+    _requiredField(value, fieldName) {
+        if (value === undefined || value === null) {
+            throw new TypeError(`Project ${fieldName} is required`);
+        }
+        return value;
     }
 }
 
