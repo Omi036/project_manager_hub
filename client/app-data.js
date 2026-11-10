@@ -127,11 +127,19 @@ class API {
     static #discussions = [];
     static #news = [];
 
-    // Datos para la autenticación con Discord
-    static #discord = {
-        clientId: "TU_CLIENT_ID_DE_DISCORD",
-        scope: "identify",
-    };
+    // URL del API. Puede sobrescribirse con window.API_BASE_URL en despliegues separados.
+    static #apiBaseUrl = (window.API_BASE_URL || window.location.origin).replace(/\/$/, "");
+
+    static #authRequest(path, options = {}) {
+        return fetch(`${API.#apiBaseUrl}${path}`, {
+            credentials: "include",
+            ...options,
+            headers: {
+                "Accept": "application/json",
+                ...(options.headers || {}),
+            },
+        });
+    }
 
     // Lee un valor del almacenamiento local y lo parsea como JSON.
     static #readStorage(storageKey) {
@@ -201,10 +209,32 @@ class API {
         };
     }
 
-    // Autentic al usuario
-    static login(username) {
-        //! TODO: IMPLEMENTAR AUTENTICACIÓN REAL CON SERVIDOR
-        return { ok: true, username };
+    // Restaura la sesión existente del servidor.
+    static async restoreSession() {
+        try {
+            const response = await API.#authRequest("/auth/me");
+            if (!response.ok) return null;
+
+            const { user } = await response.json();
+
+            // Actualiza la lista de usuarios con la información del usuario autenticado.
+            API.USERS = [
+                ...API.USERS.filter((entry) => entry.username !== user.username),
+                user,
+            ];
+
+            API.ME = user.username;
+            return user;
+
+        } catch (error) {
+            console.error("No se pudo restaurar la sesión:", error);
+            return null;
+        }
+    }
+
+    // Mantiene la compatibilidad con las llamadas existentes y devuelve el usuario autenticado.
+    static async login() {
+        return API.restoreSession();
     }
 
     // Devuelve los ajustes de la aplicación
@@ -227,23 +257,24 @@ class API {
         return settings;
     }
 
-    // Inicia el flujo de autenticación con Discord y redirige al usuario a la página de autorización.
+    // Inicia el flujo de autenticación gestionado por el servidor.
     static loginWithDiscord() {
-        const params = new URLSearchParams({
-            client_id: API.#discord.clientId,
-            redirect_uri: location.origin + location.pathname,
-            response_type: "token",
-            scope: API.#discord.scope,
-        });
-        const authorizeUrl = "https://discord.com/oauth2/authorize?" + params.toString();
+        const authorizeUrl = `${API.#apiBaseUrl}/auth/discord`;
         location.assign(authorizeUrl);
         return authorizeUrl;
     }
 
-    // Cierra la sesión del usuario 
-    static logout() {
-        //! TODO: IMPLEMENTAR CIERRE DE SESIÓN REAL CON SERVIDOR
-        return { ok: true };
+    // Cierra la sesión en el servidor.
+    static async logout() {
+        try {
+            const response = await API.#authRequest("/auth/logout", { method: "POST" });
+            if (!response.ok) throw new Error(`Logout failed (${response.status})`);
+            API.ME = "lucia_m";
+            return { ok: true };
+        } catch (error) {
+            console.error("No se pudo cerrar la sesión:", error);
+            return { ok: false, error };
+        }
     }
 
 

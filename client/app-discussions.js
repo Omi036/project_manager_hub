@@ -484,7 +484,7 @@ user_menu.addEventListener("click", (event) => {
     setMenu(false);
 
     if (menuButton.dataset.nav) location.hash = menuButton.dataset.nav;
-    if (menuButton.dataset.logout) API.logout();
+    if (menuButton.dataset.logout) API.logout().then(() => render());
     if (menuButton.dataset.loginDiscord !== undefined) API.loginWithDiscord();
     if (menuButton.dataset.openSettings !== undefined) openSettings();
 });
