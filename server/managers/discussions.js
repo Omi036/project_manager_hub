@@ -47,31 +47,30 @@ class DiscussionsManager {
     }
 
     async getDiscussions() {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, title, owner, created_at
             FROM discussions
             ORDER BY created_at DESC
         `);
-        return result.rows.map((row) => new Discussion(this, row));
+        return rows.map((row) => new Discussion(this, row));
     }
 
     async createDiscussion(discussionData) {
         const id = discussionData.id || randomUUID();
-        const result = await this.db.query(`
+        await this.db.query(`
             INSERT INTO discussions (id, title, owner)
-            VALUES ($1, $2, $3)
-            RETURNING id, title, owner, created_at
+            VALUES (?, ?, ?)
         `, [id, discussionData.title, discussionData.owner ?? discussionData.owner_username]);
-        return new Discussion(this, result.rows[0]);
+        return this.findDiscussionById(id);
     }
 
     async findDiscussionById(discussionId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, title, owner, created_at
             FROM discussions
-            WHERE id = $1
+            WHERE id = ?
         `, [discussionId]);
-        return result.rows.length ? new Discussion(this, result.rows[0]) : null;
+        return rows.length ? new Discussion(this, rows[0]) : null;
     }
 
     async updateDiscussion(discussionId, updatedData) {
@@ -82,52 +81,56 @@ class DiscussionsManager {
 
         if (!fields.length) return this.findDiscussionById(discussionId);
 
-        const assignments = fields.map(([field], index) => `${field} = $${index + 2}`);
-        const result = await this.db.query(`
+        const assignments = fields.map(([field]) => `${field} = ?`);
+        const [result] = await this.db.query(`
             UPDATE discussions
             SET ${assignments.join(", ")}
-            WHERE id = $1
-            RETURNING id, title, owner, created_at
-        `, [discussionId, ...fields.map(([, value]) => value)]);
-        return result.rows.length ? new Discussion(this, result.rows[0]) : null;
+            WHERE id = ?
+        `, [...fields.map(([, value]) => value), discussionId]);
+        return result.affectedRows ? this.findDiscussionById(discussionId) : null;
     }
 
     async deleteDiscussion(discussionId) {
-        const result = await this.db.query("DELETE FROM discussions WHERE id = $1", [discussionId]);
-        return result.rowCount > 0;
+        const [result] = await this.db.query("DELETE FROM discussions WHERE id = ?", [discussionId]);
+        return result.affectedRows > 0;
     }
 
     async getMessages(discussionId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, discussion_id, author, text, created_at
             FROM discussion_messages
-            WHERE discussion_id = $1
+            WHERE discussion_id = ?
             ORDER BY created_at ASC
         `, [discussionId]);
-        return result.rows.map((row) => new DiscussionMessage(this, row));
+        return rows.map((row) => new DiscussionMessage(this, row));
     }
 
     async createMessage(messageData) {
         const id = messageData.id || randomUUID();
-        const result = await this.db.query(`
+        await this.db.query(`
             INSERT INTO discussion_messages (id, discussion_id, author, text)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, discussion_id, author, text, created_at
+            VALUES (?, ?, ?, ?)
         `, [
             id,
             messageData.discussion_id ?? messageData.discussionId,
             messageData.author,
             messageData.text,
         ]);
-        return new DiscussionMessage(this, result.rows[0]);
+        const [rows] = await this.db.query(
+            `SELECT id, discussion_id, author, text, created_at
+             FROM discussion_messages
+             WHERE id = ?`,
+            [id],
+        );
+        return new DiscussionMessage(this, rows[0]);
     }
 
     async deleteMessage(messageId) {
-        const result = await this.db.query(
-            "DELETE FROM discussion_messages WHERE id = $1",
+        const [result] = await this.db.query(
+            "DELETE FROM discussion_messages WHERE id = ?",
             [messageId],
         );
-        return result.rowCount > 0;
+        return result.affectedRows > 0;
     }
 }
 

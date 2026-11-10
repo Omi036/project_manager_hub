@@ -28,20 +28,19 @@ class NewsManager {
     }
 
     async getNews() {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, title, description, banner, created_by, created_at
             FROM news
             ORDER BY created_at DESC
         `);
-        return result.rows.map((row) => new News(this, row));
+        return rows.map((row) => new News(this, row));
     }
 
     async createNews(newsData) {
         const id = newsData.id || randomUUID();
-        const result = await this.db.query(`
+        await this.db.query(`
             INSERT INTO news (id, title, description, banner, created_by)
-            VALUES ($1, $2, COALESCE($3, ''), COALESCE($4, ''), $5)
-            RETURNING id, title, description, banner, created_by, created_at
+            VALUES (?, ?, COALESCE(?, ''), COALESCE(?, ''), ?)
         `, [
             id,
             newsData.title,
@@ -49,16 +48,16 @@ class NewsManager {
             newsData.banner,
             newsData.created_by ?? newsData.createdBy,
         ]);
-        return new News(this, result.rows[0]);
+        return this.findNewsById(id);
     }
 
     async findNewsById(newsId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, title, description, banner, created_by, created_at
             FROM news
-            WHERE id = $1
+            WHERE id = ?
         `, [newsId]);
-        return result.rows.length ? new News(this, result.rows[0]) : null;
+        return rows.length ? new News(this, rows[0]) : null;
     }
 
     async updateNews(newsId, updatedData) {
@@ -71,19 +70,18 @@ class NewsManager {
 
         if (!fields.length) return this.findNewsById(newsId);
 
-        const assignments = fields.map(([field], index) => `${field} = $${index + 2}`);
-        const result = await this.db.query(`
+        const assignments = fields.map(([field]) => `${field} = ?`);
+        const [result] = await this.db.query(`
             UPDATE news
             SET ${assignments.join(", ")}
-            WHERE id = $1
-            RETURNING id, title, description, banner, created_by, created_at
-        `, [newsId, ...fields.map(([, value]) => value)]);
-        return result.rows.length ? new News(this, result.rows[0]) : null;
+            WHERE id = ?
+        `, [...fields.map(([, value]) => value), newsId]);
+        return result.affectedRows ? this.findNewsById(newsId) : null;
     }
 
     async deleteNews(newsId) {
-        const result = await this.db.query("DELETE FROM news WHERE id = $1", [newsId]);
-        return result.rowCount > 0;
+        const [result] = await this.db.query("DELETE FROM news WHERE id = ?", [newsId]);
+        return result.affectedRows > 0;
     }
 }
 

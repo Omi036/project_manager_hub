@@ -52,28 +52,26 @@ class ProjectsManager {
     }
 
     async getProjects() {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, title, icon, icon_color, status, description,
                    owner_name, owner_username, created_at, created_by
             FROM projects
             ORDER BY created_at DESC
         `);
 
-        return result.rows.map((row) => new Project(this, row));
+        return rows.map((row) => new Project(this, row));
     }
 
     async createProject(projectData) {
         const id = projectData.id || randomUUID();
-        const result = await this.db.query(`
+        await this.db.query(`
             INSERT INTO projects (
                 id, title, icon, icon_color, status, description,
                 owner_name, owner_username, created_by
             )
-            VALUES ($1, $2, COALESCE($3, 'tabler:rocket'),
-                    COALESCE($4, '#2d4ca3'), COALESCE($5, 'Ideado'),
-                    COALESCE($6, ''), $7, $8, $9)
-            RETURNING id, title, icon, icon_color, status, description,
-                      owner_name, owner_username, created_at, created_by
+            VALUES (?, ?, COALESCE(?, 'tabler:rocket'),
+                    COALESCE(?, '#2d4ca3'), COALESCE(?, 'Ideado'),
+                    COALESCE(?, ''), ?, ?, ?)
         `, [
             id,
             projectData.title,
@@ -87,18 +85,18 @@ class ProjectsManager {
         ]);
 
         await this._replaceProjectRelations(id, projectData);
-        return new Project(this, result.rows[0]);
+        return this.findProjectById(id);
     }
 
     async findProjectById(projectId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, title, icon, icon_color, status, description,
                    owner_name, owner_username, created_at, created_by
             FROM projects
-            WHERE id = $1
+            WHERE id = ?
         `, [projectId]);
 
-        return result.rows.length ? new Project(this, result.rows[0]) : null;
+        return rows.length ? new Project(this, rows[0]) : null;
     }
 
     async updateProject(projectId, updatedData) {
@@ -127,15 +125,13 @@ class ProjectsManager {
 
         if (updates.length) {
             const values = updates.map(([, value]) => value);
-            const assignments = updates.map(([field], index) => `${columnNames[field]} = $${index + 2}`);
-            const result = await this.db.query(`
+            const assignments = updates.map(([field]) => `${columnNames[field]} = ?`);
+            const [result] = await this.db.query(`
                 UPDATE projects
                 SET ${assignments.join(", ")}
-                WHERE id = $1
-                RETURNING id, title, icon, icon_color, status, description,
-                          owner_name, owner_username, created_at, created_by
-            `, [projectId, ...values]);
-            project = result.rows.length ? new Project(this, result.rows[0]) : null;
+                WHERE id = ?
+            `, [...values, projectId]);
+            project = result.affectedRows ? await this.findProjectById(projectId) : null;
         } else {
             project = await this.findProjectById(projectId);
         }
@@ -146,41 +142,41 @@ class ProjectsManager {
     }
 
     async deleteProject(projectId) {
-        const result = await this.db.query("DELETE FROM projects WHERE id = $1", [projectId]);
-        return result.rowCount > 0;
+        const [result] = await this.db.query("DELETE FROM projects WHERE id = ?", [projectId]);
+        return result.affectedRows > 0;
     }
 
     async getProjectTags(projectId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT tag
             FROM project_tags
-            WHERE project_id = $1
+            WHERE project_id = ?
             ORDER BY tag
         `, [projectId]);
-        return result.rows.map(({ tag }) => tag);
+        return rows.map(({ tag }) => tag);
     }
 
     async getProjectCollaborators(projectId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT collaborator_name, collaborator_username
             FROM project_collaborators
-            WHERE project_id = $1
+            WHERE project_id = ?
             ORDER BY collaborator_name
         `, [projectId]);
-        return result.rows.map(({ collaborator_name, collaborator_username }) => ({
+        return rows.map(({ collaborator_name, collaborator_username }) => ({
             name: collaborator_name,
             username: collaborator_username,
         }));
     }
 
     async getProjectFunding(projectId) {
-        const result = await this.db.query(`
+        const [rows] = await this.db.query(`
             SELECT id, contributor, contribution
             FROM project_funding
-            WHERE project_id = $1
+            WHERE project_id = ?
             ORDER BY id
         `, [projectId]);
-        return result.rows.map(({ id, contributor, contribution }) => ({
+        return rows.map(({ id, contributor, contribution }) => ({
             id,
             who: contributor,
             what: contribution,
@@ -189,19 +185,19 @@ class ProjectsManager {
 
     async getProjectOwner(username) {
         if (!username) return null;
-        const result = await this.db.query(
-            "SELECT username, nick, role, discord_id, created_at FROM users WHERE username = $1",
+        const [rows] = await this.db.query(
+            "SELECT username, nick, role, discord_id, created_at FROM users WHERE username = ?",
             [username],
         );
-        return result.rows[0] || null;
+        return rows[0] || null;
     }
 
     async _replaceProjectRelations(projectId, projectData) {
         if (projectData.tags !== undefined) {
-            await this.db.query("DELETE FROM project_tags WHERE project_id = $1", [projectId]);
+            await this.db.query("DELETE FROM project_tags WHERE project_id = ?", [projectId]);
             for (const tag of projectData.tags || []) {
                 await this.db.query(
-                    "INSERT INTO project_tags (project_id, tag) VALUES ($1, $2)",
+                    "INSERT INTO project_tags (project_id, tag) VALUES (?, ?)",
                     [projectId, tag],
                 );
             }
@@ -209,26 +205,26 @@ class ProjectsManager {
 
         if (projectData.collabs !== undefined || projectData.collaborators !== undefined) {
             const collaborators = projectData.collabs ?? projectData.collaborators ?? [];
-            await this.db.query("DELETE FROM project_collaborators WHERE project_id = $1", [projectId]);
+            await this.db.query("DELETE FROM project_collaborators WHERE project_id = ?", [projectId]);
             for (const collaborator of collaborators) {
                 const name = typeof collaborator === "string" ? collaborator : collaborator.name;
                 const username = typeof collaborator === "string" ? null : collaborator.username ?? null;
                 await this.db.query(
                     `INSERT INTO project_collaborators
                         (project_id, collaborator_name, collaborator_username)
-                     VALUES ($1, $2, $3)`,
+                     VALUES (?, ?, ?)`,
                     [projectId, name, username],
                 );
             }
         }
 
         if (projectData.funding !== undefined) {
-            await this.db.query("DELETE FROM project_funding WHERE project_id = $1", [projectId]);
+            await this.db.query("DELETE FROM project_funding WHERE project_id = ?", [projectId]);
             for (const funding of projectData.funding || []) {
                 await this.db.query(
                     `INSERT INTO project_funding
                         (project_id, contributor, contribution)
-                     VALUES ($1, $2, $3)`,
+                     VALUES (?, ?, ?)`,
                     [projectId, funding.who ?? funding.contributor ?? "", funding.what ?? funding.contribution ?? ""],
                 );
             }
