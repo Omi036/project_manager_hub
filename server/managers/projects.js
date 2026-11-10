@@ -1,7 +1,7 @@
 const { randomUUID } = require("node:crypto");
 
 class Project {
-    constructor(projectsManager, { id, title, icon, icon_color, status, description, owner_name, owner_username, created_at, created_by }) {
+    constructor(projectsManager, { id, title, icon, icon_color, status, description, tags, owner_name, owner_username, created_at, created_by }) {
         this.projectsManager = projectsManager;
 
         this.id = id;
@@ -10,13 +10,14 @@ class Project {
         this.icon_color = icon_color;
         this.status = status;
         this.description = description;
+        this.tags = tags ? tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
         this.owner_name = owner_name;
         this.owner_username = owner_username;
         this.created_at = created_at;
         this.created_by = created_by;
     }
 
-    getTags() { return this.projectsManager.getProjectTags(this.id) }
+    getTags() { return this.tags }
     getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
     getFunding() { return this.projectsManager.getProjectFunding(this.id) }
     getOwnerUser() { return this.projectsManager.getProjectOwner(this.owner_username)}
@@ -36,7 +37,7 @@ class ProjectsManager {
     async getProjects() {
         const [rows] = await this.db.query(`
             SELECT id, title, icon, icon_color, status, description,
-                   owner_name, owner_username, created_at, created_by
+                   tags, owner_name, owner_username, created_at, created_by
             FROM projects
             ORDER BY created_at DESC
         `);
@@ -49,11 +50,11 @@ class ProjectsManager {
         await this.db.query(`
             INSERT INTO projects (
                 id, title, icon, icon_color, status, description,
-                owner_name, owner_username, created_by
+                tags, owner_name, owner_username, created_by
             )
             VALUES (?, ?, COALESCE(?, 'tabler:rocket'),
                     COALESCE(?, '#2d4ca3'), COALESCE(?, 'Ideado'),
-                    COALESCE(?, ''), ?, ?, ?)
+                    COALESCE(?, ''), ?, ?, ?, ?)
         `, [
             id,
             projectData.title,
@@ -61,6 +62,7 @@ class ProjectsManager {
             projectData.icon_color ?? projectData.iconColor,
             projectData.status,
             projectData.description ?? projectData.desc,
+            this._serializeTags(projectData.tags),
             projectData.owner_name ?? projectData.owner,
             projectData.owner_username ?? null,
             projectData.created_by ?? projectData.createdBy ?? null,
@@ -73,7 +75,7 @@ class ProjectsManager {
     async findProjectById(projectId) {
         const [rows] = await this.db.query(`
             SELECT id, title, icon, icon_color, status, description,
-                   owner_name, owner_username, created_at, created_by
+                   tags, owner_name, owner_username, created_at, created_by
             FROM projects
             WHERE id = ?
         `, [projectId]);
@@ -120,22 +122,12 @@ class ProjectsManager {
 
         if (!project) return null;
         await this._replaceProjectRelations(projectId, updatedData);
-        return project;
+        return this.findProjectById(projectId);
     }
 
     async deleteProject(projectId) {
         const [result] = await this.db.query("DELETE FROM projects WHERE id = ?", [projectId]);
         return result.affectedRows > 0;
-    }
-
-    async getProjectTags(projectId) {
-        const [rows] = await this.db.query(`
-            SELECT tag
-            FROM project_tags
-            WHERE project_id = ?
-            ORDER BY tag
-        `, [projectId]);
-        return rows.map(({ tag }) => tag);
     }
 
     async getProjectCollaborators(projectId) {
@@ -176,13 +168,10 @@ class ProjectsManager {
 
     async _replaceProjectRelations(projectId, projectData) {
         if (projectData.tags !== undefined) {
-            await this.db.query("DELETE FROM project_tags WHERE project_id = ?", [projectId]);
-            for (const tag of projectData.tags || []) {
-                await this.db.query(
-                    "INSERT INTO project_tags (project_id, tag) VALUES (?, ?)",
-                    [projectId, tag],
-                );
-            }
+            await this.db.query(
+                "UPDATE projects SET tags = ? WHERE id = ?",
+                [this._serializeTags(projectData.tags), projectId],
+            );
         }
 
         if (projectData.collabs !== undefined || projectData.collaborators !== undefined) {
@@ -211,6 +200,11 @@ class ProjectsManager {
                 );
             }
         }
+    }
+
+    _serializeTags(tags) {
+        const values = Array.isArray(tags) ? tags : String(tags || "").split(",");
+        return values.map((tag) => String(tag).trim()).filter(Boolean).join(", ");
     }
 }
 

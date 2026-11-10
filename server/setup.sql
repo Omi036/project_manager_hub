@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS projects (
     status         VARCHAR(20) NOT NULL DEFAULT 'Ideado'
                    CHECK (status IN ('Ideado', 'En progreso', 'Finalizado', 'Abortado')),
     description    TEXT NOT NULL,
+    tags           TEXT NOT NULL DEFAULT '',
     owner_name     VARCHAR(100) NOT NULL,
     owner_username VARCHAR(50) REFERENCES users(username) ON DELETE SET NULL,
     created_by     VARCHAR(50) REFERENCES users(username) ON DELETE SET NULL,
@@ -39,12 +40,6 @@ CREATE TABLE IF NOT EXISTS project_collaborators (
     collaborator_name VARCHAR(100) NOT NULL,
     collaborator_username VARCHAR(50) REFERENCES users(username) ON DELETE SET NULL,
     PRIMARY KEY (project_id, collaborator_name)
-);
-
-CREATE TABLE IF NOT EXISTS project_tags (
-    project_id VARCHAR(64) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    tag        VARCHAR(50) NOT NULL,
-    PRIMARY KEY (project_id, tag)
 );
 
 CREATE TABLE IF NOT EXISTS project_funding (
