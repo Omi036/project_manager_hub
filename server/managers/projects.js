@@ -29,6 +29,8 @@ class Project {
     getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
     /** @returns {Promise<Object[]>} The project's funding entries. */
     getFunding() { return this.projectsManager.getProjectFunding(this.id) }
+    /** @returns {Promise<ProjectUpdate[]>} The project's updates. */
+    getUpdates() { return this.projectsManager.getProjectUpdates(this.id) }
     /** @param {Object|string} collaborator Collaborator to add. */
     addCollaborator(collaborator) { return this.projectsManager.addProjectCollaborator(this.id, collaborator) }
     /** @param {string} collaboratorName Collaborator name to remove. */
@@ -55,6 +57,39 @@ class Project {
     update(updatedData) { return this.projectsManager.updateProject(this.id, updatedData) }
     /** @returns {Promise<boolean>} Whether the project was deleted. */
     delete() { return this.projectsManager.deleteProject(this.id)}
+}
+
+class ProjectUpdate {
+    /**
+     * Creates a project update model backed by a projects manager.
+     * @param {ProjectsManager} projectsManager Manager used for update operations.
+     * @param {Object} data Update data returned by the database.
+     */
+    constructor(projectsManager, { id, project_id, title, description, created_at }) {
+        this.projectsManager = projectsManager;
+        this.id = id;
+        this.project_id = project_id;
+        this.title = title;
+        this.description = description;
+        this.created_at = created_at;
+    }
+
+    /**
+     * Updates this project update.
+     * @param {Object} updatedData Fields to update.
+     * @returns {Promise<ProjectUpdate|null>} The updated project update, or null if it does not exist.
+     */
+    update(updatedData) {
+        return this.projectsManager.updateProjectUpdate(this.id, updatedData);
+    }
+
+    /**
+     * Deletes this project update.
+     * @returns {Promise<boolean>} Whether the project update was deleted.
+     */
+    delete() {
+        return this.projectsManager.deleteProjectUpdate(this.id);
+    }
 }
 
 class ProjectsManager {
@@ -332,6 +367,100 @@ class ProjectsManager {
     }
 
     /**
+     * Gets all updates for a project, ordered from newest to oldest.
+     * @param {string} projectId Project ID whose updates should be returned.
+     * @returns {Promise<ProjectUpdate[]>} Project updates.
+     */
+    async getProjectUpdates(projectId) {
+        const [rows] = await this.db.query(`
+            SELECT id, project_id, title, description, created_at
+            FROM project_updates
+            WHERE project_id = ?
+            ORDER BY created_at DESC
+        `, [projectId]);
+        return rows.map((row) => new ProjectUpdate(this, row));
+    }
+
+    /**
+     * Finds a project update by ID.
+     * @param {string} updateId Project update ID to find.
+     * @param {string} [projectId] Optional project ID used to scope the lookup.
+     * @returns {Promise<ProjectUpdate|null>} The matching project update, or null.
+     */
+    async findProjectUpdateById(updateId, projectId) {
+        const conditions = ["id = ?"];
+        const values = [updateId];
+        if (projectId !== undefined) {
+            conditions.push("project_id = ?");
+            values.push(projectId);
+        }
+
+        const [rows] = await this.db.query(`
+            SELECT id, project_id, title, description, created_at
+            FROM project_updates
+            WHERE ${conditions.join(" AND ")}
+        `, values);
+        return rows.length ? new ProjectUpdate(this, rows[0]) : null;
+    }
+
+    /**
+     * Creates a project update.
+     * @param {string} projectId Project ID to update.
+     * @param {Object} updateData Project update data to insert.
+     * @returns {Promise<ProjectUpdate>} The created project update.
+     */
+    async createProjectUpdate(projectId, updateData) {
+        const id = updateData.id || randomUUID();
+        const title = this._requiredField(updateData.title, "title");
+        const description = this._requiredField(
+            updateData.description ?? updateData.desc,
+            "description",
+        );
+
+        await this.db.query(`
+            INSERT INTO project_updates (id, project_id, title, description)
+            VALUES (?, ?, ?, ?)
+        `, [id, projectId, title, description]);
+        return this.findProjectUpdateById(id, projectId);
+    }
+
+    /**
+     * Updates a project update.
+     * @param {string} updateId Project update ID to update.
+     * @param {Object} updatedData Fields to update.
+     * @returns {Promise<ProjectUpdate|null>} The updated project update, or null if it does not exist.
+     */
+    async updateProjectUpdate(updateId, updatedData) {
+        const fields = Object.entries({
+            title: updatedData.title,
+            description: updatedData.description ?? updatedData.desc,
+        }).filter(([, value]) => value !== undefined);
+
+        if (!fields.length) return this.findProjectUpdateById(updateId);
+
+        const assignments = fields.map(([field]) => `${field} = ?`);
+        const [result] = await this.db.query(`
+            UPDATE project_updates
+            SET ${assignments.join(", ")}
+            WHERE id = ?
+        `, [...fields.map(([, value]) => value), updateId]);
+        return result.affectedRows ? this.findProjectUpdateById(updateId) : null;
+    }
+
+    /**
+     * Deletes a project update.
+     * @param {string} updateId Project update ID to delete.
+     * @returns {Promise<boolean>} Whether the project update was deleted.
+     */
+    async deleteProjectUpdate(updateId) {
+        const [result] = await this.db.query(
+            "DELETE FROM project_updates WHERE id = ?",
+            [updateId],
+        );
+        return result.affectedRows > 0;
+    }
+
+    /**
      * Finds a user by username to use as the project owner.
      * @param {string} username Owner username.
      * @returns {Promise<Object|null>} The owner user, or null when no username or user exists.
@@ -577,6 +706,84 @@ class ProjectsRouter {
             }
         });
 
+        router.get("/:id/updates", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                res.json(await projectsManager.getProjectUpdates(projectId));
+            } catch (error) {
+                console.error(`Error fetching updates for project ID ${projectId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.get("/:id/updates/:updateId", async (req, res) => {
+            const { id: projectId, updateId } = req.params;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const update = await projectsManager.findProjectUpdateById(updateId, projectId);
+                if (!update) return res.status(404).json({ error: "Project update not found" });
+                res.json(update);
+            } catch (error) {
+                console.error(`Error fetching project update ${updateId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/:id/updates", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                res.status(201).json(
+                    await projectsManager.createProjectUpdate(projectId, req.body),
+                );
+            } catch (error) {
+                console.error(`Error creating update for project ID ${projectId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.put("/:id/updates/:updateId", async (req, res) => {
+            const { id: projectId, updateId } = req.params;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const existingUpdate = await projectsManager.findProjectUpdateById(updateId, projectId);
+                if (!existingUpdate) {
+                    return res.status(404).json({ error: "Project update not found" });
+                }
+                res.json(await projectsManager.updateProjectUpdate(updateId, req.body));
+            } catch (error) {
+                console.error(`Error updating project update ${updateId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/updates/:updateId", async (req, res) => {
+            const { id: projectId, updateId } = req.params;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const existingUpdate = await projectsManager.findProjectUpdateById(updateId, projectId);
+                if (!existingUpdate) {
+                    return res.status(404).json({ error: "Project update not found" });
+                }
+                await projectsManager.deleteProjectUpdate(updateId);
+                res.json({ message: "Project update deleted successfully" });
+            } catch (error) {
+                console.error(`Error deleting project update ${updateId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
         router.put("/:id/update", async (req, res) => {
             const projectId = req.params.id;
             try {
@@ -611,4 +818,4 @@ class ProjectsRouter {
     }
 }
 
-module.exports = { Project, ProjectsManager };
+module.exports = { Project, ProjectUpdate, ProjectsManager };
