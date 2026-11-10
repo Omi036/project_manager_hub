@@ -1,4 +1,9 @@
 class User {
+    /**
+     * Creates a user model backed by a users manager.
+     * @param {UsersManager} usersManager Manager used for user operations.
+     * @param {Object} data User data returned by the database.
+     */
     constructor(usersManager, {username, nick, role, discord_id, avatar_url, created_at}) {
         this.usersManager = usersManager;
         this.username = username;
@@ -9,16 +14,27 @@ class User {
         this.created_at = created_at;
     }
 
+    /**
+     * Updates this user.
+     * @param {Object} updatedData Fields to update.
+     * @returns {Promise<User|null>} The updated user, or null if it does not exist.
+     */
     update(updatedData) { return this.usersManager.updateUser(this.username, updatedData) }
+    /** @returns {Promise<boolean>} Whether the user was deleted. */
     delete() { return this.usersManager.deleteUser(this.username) }
 }
 
 
 class UsersManager {
+    /**
+     * Creates a users manager.
+     * @param {Object} db Database pool or connection.
+     */
     constructor(db) {
         this.db = db;
     }
 
+    /** @returns {Promise<User[]>} All users ordered by nickname. */
     async getUsers() {
         const [rows] = await this.db.query(`
             SELECT username, nick, role, discord_id, avatar_url, created_at
@@ -28,6 +44,11 @@ class UsersManager {
         return rows.map((row) => new User(this, row));
     }
 
+    /**
+     * Creates a user.
+     * @param {Object} userData User data to insert.
+     * @returns {Promise<User>} The created user.
+     */
     async createUser(userData) {
         await this.db.query(`
             INSERT INTO users (username, nick, role, discord_id, avatar_url)
@@ -42,6 +63,11 @@ class UsersManager {
         return this.findUserByUsername(userData.username);
     }
 
+    /**
+     * Finds a user by username.
+     * @param {string} username Username to find.
+     * @returns {Promise<User|null>} The matching user, or null.
+     */
     async findUserByUsername(username) {
         const [rows] = await this.db.query(`
             SELECT username, nick, role, discord_id, avatar_url, created_at
@@ -51,6 +77,12 @@ class UsersManager {
         return rows.length ? new User(this, rows[0]) : null;
     }
 
+    /**
+     * Updates a user.
+     * @param {string} username Username of the user to update.
+     * @param {Object} updatedData Fields to update.
+     * @returns {Promise<User|null>} The updated user, or null if it does not exist.
+     */
     async updateUser(username, updatedData) {
         const fields = Object.entries({
             nick: updatedData.nick,
@@ -70,6 +102,11 @@ class UsersManager {
         return result.affectedRows ? this.findUserByUsername(username) : null;
     }
 
+    /**
+     * Deletes a user.
+     * @param {string} username Username of the user to delete.
+     * @returns {Promise<boolean>} Whether the user was deleted.
+     */
     async deleteUser(username) {
         const [result] = await this.db.query("DELETE FROM users WHERE username = ?", [username]);
         return result.affectedRows > 0;

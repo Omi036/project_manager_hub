@@ -1,6 +1,11 @@
 const { randomUUID } = require("node:crypto");
 
 class Project {
+    /**
+     * Creates a project model backed by a projects manager.
+     * @param {ProjectsManager} projectsManager Manager used for project operations.
+     * @param {Object} data Project data returned by the database.
+     */
     constructor(projectsManager, { id, title, icon, icon_color, status, description, tags, owner_name, owner_username, created_at, created_by }) {
         this.projectsManager = projectsManager;
 
@@ -17,23 +22,43 @@ class Project {
         this.created_by = created_by;
     }
 
+    /** @returns {string[]} The project's tags. */
     getTags() { return this.tags }
+    /** @returns {Promise<Object[]>} The project's collaborators. */
     getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
+    /** @returns {Promise<Object[]>} The project's funding entries. */
     getFunding() { return this.projectsManager.getProjectFunding(this.id) }
+    /** @returns {Promise<Object|null>} The project's owner, if found. */
     getOwnerUser() { return this.projectsManager.getProjectOwner(this.owner_username)}
 
+    /**
+     * Checks whether a username belongs to the project owner.
+     * @param {string} username Username to compare.
+     * @returns {boolean} Whether the username is the owner.
+     */
     userIsOwner(username) { return this.owner_username === username }
 
+    /**
+     * Updates this project.
+     * @param {Object} updatedData Fields to update.
+     * @returns {Promise<Project|null>} The updated project, or null if it does not exist.
+     */
     update(updatedData) { return this.projectsManager.updateProject(this.id, updatedData) }
+    /** @returns {Promise<boolean>} Whether the project was deleted. */
     delete() { return this.projectsManager.deleteProject(this.id)}
 }
 
 
 class ProjectsManager {
+    /**
+     * Creates a projects manager.
+     * @param {Object} db Database pool or connection.
+     */
     constructor(db) {
         this.db = db;
     }
 
+    /** @returns {Promise<Project[]>} All projects ordered by creation date. */
     async getProjects() {
         const [rows] = await this.db.query(`
             SELECT id, title, icon, icon_color, status, description,
@@ -45,6 +70,11 @@ class ProjectsManager {
         return rows.map((row) => new Project(this, row));
     }
 
+    /**
+     * Creates a project and its related collaborators and funding entries.
+     * @param {Object} projectData Project data to insert.
+     * @returns {Promise<Project>} The created project.
+     */
     async createProject(projectData) {
         const id = projectData.id || randomUUID();
         const title = this._requiredField(projectData.title, "title");
@@ -88,6 +118,12 @@ class ProjectsManager {
         }
     }
 
+    /**
+     * Finds a project by ID.
+     * @param {string} projectId Project ID to find.
+     * @param {Object} [db=this.db] Database pool or connection to query.
+     * @returns {Promise<Project|null>} The matching project, or null.
+     */
     async findProjectById(projectId, db = this.db) {
         const [rows] = await db.query(`
             SELECT id, title, icon, icon_color, status, description,
@@ -99,6 +135,12 @@ class ProjectsManager {
         return rows.length ? new Project(this, rows[0]) : null;
     }
 
+    /**
+     * Updates a project and any supplied related data.
+     * @param {string} projectId Project ID to update.
+     * @param {Object} updatedData Fields and relations to update.
+     * @returns {Promise<Project|null>} The updated project, or null if it does not exist.
+     */
     async updateProject(projectId, updatedData) {
         const fields = {
             title: updatedData.title,
@@ -155,6 +197,11 @@ class ProjectsManager {
         }
     }
 
+    /**
+     * Deletes a project and its related collaborators and funding entries.
+     * @param {string} projectId Project ID to delete.
+     * @returns {Promise<boolean>} Whether the project was deleted.
+     */
     async deleteProject(projectId) {
         const connection = await this.db.getConnection();
 
@@ -175,6 +222,11 @@ class ProjectsManager {
         }
     }
 
+    /**
+     * Gets the collaborators for a project.
+     * @param {string} projectId Project ID whose collaborators should be returned.
+     * @returns {Promise<Object[]>} Project collaborators.
+     */
     async getProjectCollaborators(projectId) {
         const [rows] = await this.db.query(`
             SELECT collaborator_name, collaborator_username
@@ -188,6 +240,11 @@ class ProjectsManager {
         }));
     }
 
+    /**
+     * Gets the funding entries for a project.
+     * @param {string} projectId Project ID whose funding should be returned.
+     * @returns {Promise<Object[]>} Project funding entries.
+     */
     async getProjectFunding(projectId) {
         const [rows] = await this.db.query(`
             SELECT id, contributor, contribution
@@ -202,6 +259,11 @@ class ProjectsManager {
         }));
     }
 
+    /**
+     * Finds a user by username to use as the project owner.
+     * @param {string} username Owner username.
+     * @returns {Promise<Object|null>} The owner user, or null when no username or user exists.
+     */
     async getProjectOwner(username) {
         if (!username) return null;
 
@@ -213,7 +275,13 @@ class ProjectsManager {
     }
 
 
-    // Updates the collaborators and funding relations for a project
+    /**
+     * Replaces supplied collaborator and funding relations for a project.
+     * @param {string} projectId Project ID whose relations should be replaced.
+     * @param {Object} projectData Data containing optional collaborator and funding arrays.
+     * @param {Object} [db=this.db] Database pool or connection to query.
+     * @returns {Promise<void>}
+     */
     async _replaceProjectRelations(projectId, projectData, db = this.db) {
         // Handle collaborators
         if (projectData.collabs !== undefined || projectData.collaborators !== undefined) {
@@ -263,13 +331,23 @@ class ProjectsManager {
     }
 
 
-    // Joins an array of tags into a comma-separated string
+    /**
+     * Serializes tags into the database representation.
+     * @param {string|string[]} tags Tags to serialize.
+     * @returns {string} Comma-separated tags.
+     */
     _serializeTags(tags) {
         const values = Array.isArray(tags) ? tags : String(tags || "").split(",");
         return values.map((tag) => String(tag).trim()).filter(Boolean).join(", ");
     }
 
-    // Validates that a required field is present and not null or undefined
+    /**
+     * Validates that a required project field is present.
+     * @param {*} value Field value to validate.
+     * @param {string} fieldName Field name used in the error message.
+     * @returns {*} The validated value.
+     * @throws {TypeError} If the value is null or undefined.
+     */
     _requiredField(value, fieldName) {
         if (value === undefined || value === null) {
             throw new TypeError(`Project ${fieldName} is required`);
