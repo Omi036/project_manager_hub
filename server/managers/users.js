@@ -1,3 +1,5 @@
+const express = require("express");
+
 class User {
     /**
      * Creates a user model backed by a users manager.
@@ -110,6 +112,74 @@ class UsersManager {
     async deleteUser(username) {
         const [result] = await this.db.query("DELETE FROM users WHERE username = ?", [username]);
         return result.affectedRows > 0;
+    }
+
+    /**
+     * Creates a router for user-related endpoints.
+     * @returns {express.Router} Router for user-related endpoints.
+     */
+    createRouter() {
+        return UsersRouter.createRouter(this);
+    }
+}
+
+class UsersRouter {
+    static createRouter(usersManager) {
+        const router = express.Router();
+
+        router.get("/all", async (req, res) => {
+            try {
+                res.json(await usersManager.getUsers());
+            } catch (error) {
+                console.error("Error fetching users:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.get("/:username", async (req, res) => {
+            try {
+                const user = await usersManager.findUserByUsername(req.params.username);
+                if (!user) return res.status(404).json({ error: "User not found" });
+                res.json(user);
+            } catch (error) {
+                console.error(`Error fetching user ${req.params.username}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/create", async (req, res) => {
+            try {
+                res.status(201).json(await usersManager.createUser(req.body));
+            } catch (error) {
+                console.error("Error creating user:", error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.put("/:username/update", async (req, res) => {
+            try {
+                const user = await usersManager.updateUser(req.params.username, req.body);
+                if (!user) return res.status(404).json({ error: "User not found" });
+                res.json(user);
+            } catch (error) {
+                console.error(`Error updating user ${req.params.username}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:username/delete", async (req, res) => {
+            try {
+                if (!await usersManager.deleteUser(req.params.username)) {
+                    return res.status(404).json({ error: "User not found" });
+                }
+                res.json({ message: "User deleted successfully" });
+            } catch (error) {
+                console.error(`Error deleting user ${req.params.username}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        return router;
     }
 }
 

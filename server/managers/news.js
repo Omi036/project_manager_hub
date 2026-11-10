@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const express = require("express");
 
 class News {
     /**
@@ -112,6 +113,74 @@ class NewsManager {
     async deleteNews(newsId) {
         const [result] = await this.db.query("DELETE FROM news WHERE id = ?", [newsId]);
         return result.affectedRows > 0;
+    }
+
+    /**
+     * Creates a router for news-related endpoints.
+     * @returns {express.Router} Router for news-related endpoints.
+     */
+    createRouter() {
+        return NewsRouter.createRouter(this);
+    }
+}
+
+class NewsRouter {
+    static createRouter(newsManager) {
+        const router = express.Router();
+
+        router.get("/all", async (req, res) => {
+            try {
+                res.json(await newsManager.getNews());
+            } catch (error) {
+                console.error("Error fetching news:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.get("/:id", async (req, res) => {
+            try {
+                const news = await newsManager.findNewsById(req.params.id);
+                if (!news) return res.status(404).json({ error: "News item not found" });
+                res.json(news);
+            } catch (error) {
+                console.error(`Error fetching news item ${req.params.id}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/create", async (req, res) => {
+            try {
+                res.status(201).json(await newsManager.createNews(req.body));
+            } catch (error) {
+                console.error("Error creating news:", error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.put("/:id/update", async (req, res) => {
+            try {
+                const news = await newsManager.updateNews(req.params.id, req.body);
+                if (!news) return res.status(404).json({ error: "News item not found" });
+                res.json(news);
+            } catch (error) {
+                console.error(`Error updating news item ${req.params.id}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/delete", async (req, res) => {
+            try {
+                if (!await newsManager.deleteNews(req.params.id)) {
+                    return res.status(404).json({ error: "News item not found" });
+                }
+                res.json({ message: "News item deleted successfully" });
+            } catch (error) {
+                console.error(`Error deleting news item ${req.params.id}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        return router;
     }
 }
 

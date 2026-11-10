@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const express = require("express");
 
 class Project {
     /**
@@ -28,6 +29,14 @@ class Project {
     getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
     /** @returns {Promise<Object[]>} The project's funding entries. */
     getFunding() { return this.projectsManager.getProjectFunding(this.id) }
+    /** @param {Object|string} collaborator Collaborator to add. */
+    addCollaborator(collaborator) { return this.projectsManager.addProjectCollaborator(this.id, collaborator) }
+    /** @param {string} collaboratorName Collaborator name to remove. */
+    removeCollaborator(collaboratorName) { return this.projectsManager.removeProjectCollaborator(this.id, collaboratorName) }
+    /** @param {Object} funding Funding entry to add. */
+    addFunding(funding) { return this.projectsManager.addProjectFunding(this.id, funding) }
+    /** @param {number|string} fundingId Funding entry ID to remove. */
+    removeFunding(fundingId) { return this.projectsManager.removeProjectFunding(this.id, fundingId) }
     /** @returns {Promise<Object|null>} The project's owner, if found. */
     getOwnerUser() { return this.projectsManager.getProjectOwner(this.owner_username)}
 
@@ -47,7 +56,6 @@ class Project {
     /** @returns {Promise<boolean>} Whether the project was deleted. */
     delete() { return this.projectsManager.deleteProject(this.id)}
 }
-
 
 class ProjectsManager {
     /**
@@ -260,6 +268,70 @@ class ProjectsManager {
     }
 
     /**
+     * Adds one collaborator to a project.
+     * @param {string} projectId Project ID.
+     * @param {Object|string} collaborator Collaborator name or data.
+     * @returns {Promise<Object>} The added collaborator.
+     */
+    async addProjectCollaborator(projectId, collaborator) {
+        const { name, username } = this._normalizeCollaborator(collaborator);
+        const [result] = await this.db.query(
+            `INSERT INTO project_collaborators
+                (project_id, collaborator_name, collaborator_username)
+             VALUES (?, ?, ?)`,
+            [projectId, name, username],
+        );
+        return { name, username, projectId, added: result.affectedRows > 0 };
+    }
+
+    /**
+     * Removes one collaborator from a project.
+     * @param {string} projectId Project ID.
+     * @param {string} collaboratorName Collaborator name.
+     * @returns {Promise<boolean>} Whether a collaborator was removed.
+     */
+    async removeProjectCollaborator(projectId, collaboratorName) {
+        const name = this._requiredField(collaboratorName, "collaborator name");
+        const [result] = await this.db.query(
+            "DELETE FROM project_collaborators WHERE project_id = ? AND collaborator_name = ?",
+            [projectId, name],
+        );
+        return result.affectedRows > 0;
+    }
+
+    /**
+     * Adds one funding entry to a project.
+     * @param {string} projectId Project ID.
+     * @param {Object} funding Funding data.
+     * @returns {Promise<Object>} The added funding entry.
+     */
+    async addProjectFunding(projectId, funding) {
+        const { contributor, contribution } = this._normalizeFunding(funding);
+        const [result] = await this.db.query(
+            `INSERT INTO project_funding
+                (project_id, contributor, contribution)
+             VALUES (?, ?, ?)`,
+            [projectId, contributor, contribution],
+        );
+        return { id: result.insertId, who: contributor, what: contribution };
+    }
+
+    /**
+     * Removes one funding entry from a project.
+     * @param {string} projectId Project ID.
+     * @param {number|string} fundingId Funding entry ID.
+     * @returns {Promise<boolean>} Whether a funding entry was removed.
+     */
+    async removeProjectFunding(projectId, fundingId) {
+        const id = this._requiredField(fundingId, "funding id");
+        const [result] = await this.db.query(
+            "DELETE FROM project_funding WHERE project_id = ? AND id = ?",
+            [projectId, id],
+        );
+        return result.affectedRows > 0;
+    }
+
+    /**
      * Finds a user by username to use as the project owner.
      * @param {string} username Owner username.
      * @returns {Promise<Object|null>} The owner user, or null when no username or user exists.
@@ -273,7 +345,6 @@ class ProjectsManager {
         );
         return rows[0] || null;
     }
-
 
     /**
      * Replaces supplied collaborator and funding relations for a project.
@@ -289,15 +360,10 @@ class ProjectsManager {
             if (!Array.isArray(collaborators)) {
                 throw new TypeError("Project collaborators must be an array");
             }
-            
 
             await db.query("DELETE FROM project_collaborators WHERE project_id = ?", [projectId]);
             for (const collaborator of collaborators) {
-                if (!collaborator || (typeof collaborator !== "string" && typeof collaborator.name !== "string")) {
-                    throw new TypeError("Each project collaborator must have a name");
-                }
-                const name = typeof collaborator === "string" ? collaborator : collaborator.name;
-                const username = typeof collaborator === "string" ? null : collaborator.username ?? null;
+                const { name, username } = this._normalizeCollaborator(collaborator);
                 await db.query(
                     `INSERT INTO project_collaborators
                         (project_id, collaborator_name, collaborator_username)
@@ -313,23 +379,44 @@ class ProjectsManager {
                 throw new TypeError("Project funding must be an array");
             }
 
-
             await db.query("DELETE FROM project_funding WHERE project_id = ?", [projectId]);
             for (const funding of projectData.funding) {
-                if (!funding || typeof funding !== "object") {
-                    throw new TypeError("Each project funding entry must be an object");
-                }
+                const { contributor, contribution } = this._normalizeFunding(funding);
 
                 await db.query(
                     `INSERT INTO project_funding
                         (project_id, contributor, contribution)
                      VALUES (?, ?, ?)`,
-                    [projectId, funding.who ?? funding.contributor ?? "", funding.what ?? funding.contribution ?? ""],
+                    [projectId, contributor, contribution],
                 );
             }
         }
     }
 
+    _normalizeCollaborator(collaborator) {
+        if (!collaborator || (typeof collaborator !== "string" && typeof collaborator.name !== "string")) {
+            throw new TypeError("Each project collaborator must have a name");
+        }
+
+        const name = typeof collaborator === "string" ? collaborator.trim() : collaborator.name.trim();
+        if (!name) throw new TypeError("Project collaborator name is required");
+
+        return {
+            name,
+            username: typeof collaborator === "string" ? null : collaborator.username ?? null,
+        };
+    }
+
+    _normalizeFunding(funding) {
+        if (!funding || typeof funding !== "object") {
+            throw new TypeError("Each project funding entry must be an object");
+        }
+
+        return {
+            contributor: String(funding.who ?? funding.contributor ?? "").trim(),
+            contribution: String(funding.what ?? funding.contribution ?? "").trim(),
+        };
+    }
 
     /**
      * Serializes tags into the database representation.
@@ -353,6 +440,171 @@ class ProjectsManager {
             throw new TypeError(`Project ${fieldName} is required`);
         }
         return value;
+    }
+
+    /**
+     * Creates a router for project-related endpoints.
+     * @returns {express.Router} Router for project-related endpoints.
+     */
+    createRouter() {
+        return ProjectsRouter.createRouter(this);
+    }
+}
+
+class ProjectsRouter {
+    static createRouter(projectsManager) {
+        const router = express.Router();
+
+        router.get("/all", async (req, res) => {
+            try {
+                const projects = await projectsManager.getProjects();
+                res.json(projects);
+
+            } catch (error) {
+                console.error("Error fetching projects:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.get("/:id", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                const project = await projectsManager.findProjectById(projectId);
+                if (project) {
+                    res.json(project);
+                } else {
+                    res.status(404).json({ error: "Project not found" });
+                }
+            } catch (error) {
+                console.error(`Error fetching project with ID ${projectId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/create", async (req, res) => {
+            try {
+                const newProject = await projectsManager.createProject(req.body);
+                res.status(201).json(newProject);
+            } catch (error) {
+                console.error("Error creating project:", error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.get("/:id/collaborators", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                const collaborators = await projectsManager.getProjectCollaborators(projectId);
+                res.json(collaborators);
+            } catch (error) {
+                console.error(`Error fetching collaborators for project ID ${projectId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/:id/collaborators", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const collaborator = await projectsManager.addProjectCollaborator(projectId, req.body);
+                res.status(201).json(collaborator);
+            } catch (error) {
+                console.error(`Error adding collaborator to project ID ${projectId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/collaborators", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const removed = await projectsManager.removeProjectCollaborator(
+                    projectId,
+                    req.body?.name ?? req.body?.collaborator_name ?? req.query.name,
+                );
+                if (!removed) return res.status(404).json({ error: "Collaborator not found" });
+                res.status(204).send();
+            } catch (error) {
+                console.error(`Error removing collaborator from project ID ${projectId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.get("/:id/funding", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                const funding = await projectsManager.getProjectFunding(projectId);
+                res.json(funding);
+            } catch (error) {
+                console.error(`Error fetching funding for project ID ${projectId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/:id/funding", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const funding = await projectsManager.addProjectFunding(projectId, req.body);
+                res.status(201).json(funding);
+            } catch (error) {
+                console.error(`Error adding funding to project ID ${projectId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/funding/:fundingId", async (req, res) => {
+            const { id: projectId, fundingId } = req.params;
+            try {
+                if (!await projectsManager.findProjectById(projectId)) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+                const removed = await projectsManager.removeProjectFunding(projectId, fundingId);
+                if (!removed) return res.status(404).json({ error: "Funding entry not found" });
+                res.status(204).send();
+            } catch (error) {
+                console.error(`Error removing funding from project ID ${projectId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.put("/:id/update", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                const updatedProject = await projectsManager.updateProject(projectId, req.body);
+                if (updatedProject) {
+                    res.json(updatedProject);
+                } else {
+                    res.status(404).json({ error: "Project not found" });
+                }
+            } catch (error) {
+                console.error(`Error updating project with ID ${projectId}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/delete", async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                const deleted = await projectsManager.deleteProject(projectId);
+                if (deleted) {
+                    res.json({ message: "Project deleted successfully" });
+                } else {
+                    res.status(404).json({ error: "Project not found" });
+                }
+            } catch (error) {
+                console.error(`Error deleting project with ID ${projectId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        return router;
     }
 }
 

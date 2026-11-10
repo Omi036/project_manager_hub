@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const express = require("express");
 
 class DiscussionMessage {
     /**
@@ -180,6 +181,116 @@ class DiscussionsManager {
             [messageId],
         );
         return result.affectedRows > 0;
+    }
+
+    /**
+     * Creates a router for discussion-related endpoints.
+     * @returns {express.Router} Router for discussion-related endpoints.
+     */
+    createRouter() {
+        return DiscussionsRouter.createRouter(this);
+    }
+}
+
+class DiscussionsRouter {
+    static createRouter(discussionsManager) {
+        const router = express.Router();
+
+        router.get("/all", async (req, res) => {
+            try {
+                res.json(await discussionsManager.getDiscussions());
+            } catch (error) {
+                console.error("Error fetching discussions:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.get("/:id", async (req, res) => {
+            try {
+                const discussion = await discussionsManager.findDiscussionById(req.params.id);
+                if (!discussion) return res.status(404).json({ error: "Discussion not found" });
+                res.json(discussion);
+            } catch (error) {
+                console.error(`Error fetching discussion ${req.params.id}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/create", async (req, res) => {
+            try {
+                res.status(201).json(await discussionsManager.createDiscussion(req.body));
+            } catch (error) {
+                console.error("Error creating discussion:", error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.put("/:id/update", async (req, res) => {
+            try {
+                const discussion = await discussionsManager.updateDiscussion(req.params.id, req.body);
+                if (!discussion) return res.status(404).json({ error: "Discussion not found" });
+                res.json(discussion);
+            } catch (error) {
+                console.error(`Error updating discussion ${req.params.id}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/delete", async (req, res) => {
+            try {
+                if (!await discussionsManager.deleteDiscussion(req.params.id)) {
+                    return res.status(404).json({ error: "Discussion not found" });
+                }
+                res.json({ message: "Discussion deleted successfully" });
+            } catch (error) {
+                console.error(`Error deleting discussion ${req.params.id}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.get("/:id/messages", async (req, res) => {
+            try {
+                if (!await discussionsManager.findDiscussionById(req.params.id)) {
+                    return res.status(404).json({ error: "Discussion not found" });
+                }
+                res.json(await discussionsManager.getMessages(req.params.id));
+            } catch (error) {
+                console.error(`Error fetching messages for discussion ${req.params.id}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        router.post("/:id/messages", async (req, res) => {
+            try {
+                if (!await discussionsManager.findDiscussionById(req.params.id)) {
+                    return res.status(404).json({ error: "Discussion not found" });
+                }
+                res.status(201).json(await discussionsManager.createMessage({
+                    ...req.body,
+                    discussion_id: req.params.id,
+                }));
+            } catch (error) {
+                console.error(`Error creating message for discussion ${req.params.id}:`, error);
+                res.status(400).json({ error: error.message });
+            }
+        });
+
+        router.delete("/:id/messages/:messageId", async (req, res) => {
+            try {
+                if (!await discussionsManager.findDiscussionById(req.params.id)) {
+                    return res.status(404).json({ error: "Discussion not found" });
+                }
+                if (!await discussionsManager.deleteMessage(req.params.messageId)) {
+                    return res.status(404).json({ error: "Message not found" });
+                }
+                res.json({ message: "Message deleted successfully" });
+            } catch (error) {
+                console.error(`Error deleting message ${req.params.messageId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        return router;
     }
 }
 
