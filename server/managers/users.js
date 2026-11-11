@@ -88,7 +88,7 @@ class UsersManager {
     async updateUser(username, updatedData) {
         const fields = Object.entries({
             nick: updatedData.nick,
-            role: updatedData.role,
+            role: updatedData.role,  
             discord_id: updatedData.discord_id ?? updatedData.discordId,
             avatar_url: updatedData.avatar_url ?? updatedData.avatarUrl,
         }).filter(([, value]) => value !== undefined);
@@ -149,6 +149,10 @@ class UsersRouter {
 
         router.post("/create", async (req, res) => {
             try {
+                if(req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden: Only admins can create users." });
+                }
+
                 res.status(201).json(await usersManager.createUser(req.body));
             } catch (error) {
                 console.error("Error creating user:", error);
@@ -158,6 +162,18 @@ class UsersRouter {
 
         router.put("/:username/update", async (req, res) => {
             try {
+                // Only allow the user themselves or an admin to update the user
+                if(req.user.username !== req.params.username && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
+                const hasRoleField = req.body !== null
+                    && typeof req.body === "object"
+                    && Object.prototype.hasOwnProperty.call(req.body, "role");
+                if (hasRoleField && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden: Only admins can change roles." });
+                }
+
                 const user = await usersManager.updateUser(req.params.username, req.body);
                 if (!user) return res.status(404).json({ error: "User not found" });
                 res.json(user);
@@ -167,17 +183,18 @@ class UsersRouter {
             }
         });
 
-        router.delete("/:username/delete", async (req, res) => {
-            try {
-                if (!await usersManager.deleteUser(req.params.username)) {
-                    return res.status(404).json({ error: "User not found" });
-                }
-                res.json({ message: "User deleted successfully" });
-            } catch (error) {
-                console.error(`Error deleting user ${req.params.username}:`, error);
-                res.status(500).json({ error: "Internal Server Error" });
-            }
-        });
+        // Delete route disabled. Uncomment to enable it.
+        // router.delete("/:username/delete", async (req, res) => {
+        //     try {
+        //         if (!await usersManager.deleteUser(req.params.username)) {
+        //             return res.status(404).json({ error: "User not found" });
+        //         }
+        //         res.json({ message: "User deleted successfully" });
+        //     } catch (error) {
+        //         console.error(`Error deleting user ${req.params.username}:`, error);
+        //         res.status(500).json({ error: "Internal Server Error" });
+        //     }
+        // });
 
         return router;
     }

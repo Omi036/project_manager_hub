@@ -170,6 +170,16 @@ class DiscussionsManager {
         return new DiscussionMessage(this, rows[0]);
     }
 
+
+    async getMessageById(messageId) {
+        const [rows] = await this.db.query(`
+            SELECT id, discussion_id, author, text, created_at
+            FROM discussion_messages
+            WHERE id = ?
+        `, [messageId]);
+        return rows.length ? new DiscussionMessage(this, rows[0]) : null;
+    }
+
     /**
      * Deletes a discussion message.
      * @param {string} messageId Message ID to delete.
@@ -230,9 +240,14 @@ class DiscussionsRouter {
 
         router.put("/:id/update", async (req, res) => {
             try {
-                const discussion = await discussionsManager.updateDiscussion(req.params.id, req.body);
-                if (!discussion) return res.status(404).json({ error: "Discussion not found" });
-                res.json(discussion);
+                const discussion = await discussionsManager.findDiscussionById(req.params.id);
+                if(req.user.username !== discussion?.owner && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
+                const updatedDiscussion = await discussionsManager.updateDiscussion(req.params.id, req.body);
+                if (!updatedDiscussion) return res.status(404).json({ error: "Discussion not found" });
+                res.json(updatedDiscussion);
             } catch (error) {
                 console.error(`Error updating discussion ${req.params.id}:`, error);
                 res.status(400).json({ error: error.message });
@@ -241,6 +256,11 @@ class DiscussionsRouter {
 
         router.delete("/:id/delete", async (req, res) => {
             try {
+                const discussion = await discussionsManager.findDiscussionById(req.params.id);
+                if(req.user.username !== discussion?.owner && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 if (!await discussionsManager.deleteDiscussion(req.params.id)) {
                     return res.status(404).json({ error: "Discussion not found" });
                 }
@@ -281,6 +301,19 @@ class DiscussionsRouter {
 
         router.delete("/:id/messages/:messageId", async (req, res) => {
             try {
+                const message = await discussionsManager.getMessageById(req.params.messageId);
+                if (!message) {
+                    return res.status(404).json({ error: "Message not found" });
+                }
+
+                if(message.discussion_id !== req.params.id) {
+                    return res.status(400).json({ error: "Message does not belong to the specified discussion" });
+                }
+
+                if(req.user.username !== message.author && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 if (!await discussionsManager.findDiscussionById(req.params.id)) {
                     return res.status(404).json({ error: "Discussion not found" });
                 }

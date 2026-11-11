@@ -150,6 +150,10 @@ class NewsRouter {
 
         router.post("/create", async (req, res) => {
             try {
+                if(req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden: Only admins can create news items." });
+                }
+
                 res.status(201).json(await newsManager.createNews({
                     ...req.body,
                     created_by: req.user.username,
@@ -162,6 +166,10 @@ class NewsRouter {
 
         router.put("/:id/update", async (req, res) => {
             try {
+                if(req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden: Only admins can update news items." });
+                }
+
                 const news = await newsManager.updateNews(req.params.id, req.body);
                 if (!news) return res.status(404).json({ error: "News item not found" });
                 res.json(news);
@@ -173,6 +181,10 @@ class NewsRouter {
 
         router.delete("/:id/delete", async (req, res) => {
             try {
+                if(req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden: Only admins can delete news items." });
+                }
+
                 if (!await newsManager.deleteNews(req.params.id)) {
                     return res.status(404).json({ error: "News item not found" });
                 }

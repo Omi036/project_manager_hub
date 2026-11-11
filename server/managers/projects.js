@@ -49,6 +49,28 @@ class Project {
      */
     userIsOwner(username) { return this.owner_username === username }
 
+
+    /**
+     * Checks whether a username belongs to one of the project collaborators.
+     * @param {string} username Username to check.
+     * @returns {Promise<boolean>} Whether the username is a collaborator.
+     */
+    async userIsCollab(username) {
+        const collaborators = await this.getCollaborators();
+        return collaborators.some((collab) => collab.username === username);
+    }
+
+
+    /**
+     * Checks whether a username belongs to the project owner or one of the collaborators.
+     * @param {string} username Username to check.
+     * @returns {Promise<boolean>} Whether the username is a member of the project.
+     */
+    async userIsMember(username) {
+        if (this.userIsOwner(username)) return true;
+        return this.userIsCollab(username);
+    }
+
     /**
      * Updates this project.
      * @param {Object} updatedData Fields to update.
@@ -636,10 +658,19 @@ class ProjectsRouter {
 
         router.post("/:id/collaborators", async (req, res) => {
             const projectId = req.params.id;
+            const reqUsername = req.user.username
+            
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId);
+                if(!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
+                // Permitir solo a los admins o a los owners del proyecto
+                if(!project.userIsOwner(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 const collaborator = await projectsManager.addProjectCollaborator(projectId, req.body);
                 res.status(201).json(collaborator);
             } catch (error) {
@@ -650,10 +681,20 @@ class ProjectsRouter {
 
         router.delete("/:id/collaborators", async (req, res) => {
             const projectId = req.params.id;
+            const reqUsername = req.user.username
+
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId);
+                if(!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
+                // Permitir solo a los admins o a los owners del proyecto
+                if(!project.userIsOwner(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
+
                 const removed = await projectsManager.removeProjectCollaborator(
                     projectId,
                     req.body?.name ?? req.body?.collaborator_name ?? req.query.name,
@@ -679,10 +720,19 @@ class ProjectsRouter {
 
         router.post("/:id/funding", async (req, res) => {
             const projectId = req.params.id;
+            const reqUsername = req.user.username;
+
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId);
+                if(!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
+                // Permitir solo a los admins o a los miembros del proyecto
+                if(!await project.userIsMember(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+                
                 const funding = await projectsManager.addProjectFunding(projectId, req.body);
                 res.status(201).json(funding);
             } catch (error) {
@@ -693,10 +743,20 @@ class ProjectsRouter {
 
         router.delete("/:id/funding/:fundingId", async (req, res) => {
             const { id: projectId, fundingId } = req.params;
+            const reqUsername = req.user.username;
+
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId);
+                if (!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+                
+                // Permitir solo a los admins o a los miembros del proyecto
+                if(!await project.userIsMember(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
+
                 const removed = await projectsManager.removeProjectFunding(projectId, fundingId);
                 if (!removed) return res.status(404).json({ error: "Funding entry not found" });
                 res.status(204).send();
@@ -712,6 +772,7 @@ class ProjectsRouter {
                 if (!await projectsManager.findProjectById(projectId)) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
                 res.json(await projectsManager.getProjectUpdates(projectId));
             } catch (error) {
                 console.error(`Error fetching updates for project ID ${projectId}:`, error);
@@ -736,10 +797,19 @@ class ProjectsRouter {
 
         router.post("/:id/updates", async (req, res) => {
             const projectId = req.params.id;
+            const reqUsername = req.user.username;
+
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId);
+                if (!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
+                // Permitir solo a los admins o miembros del proyecto
+                if(!await project.userIsMember(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+                
                 res.status(201).json(
                     await projectsManager.createProjectUpdate(projectId, req.body),
                 );
@@ -751,10 +821,19 @@ class ProjectsRouter {
 
         router.put("/:id/updates/:updateId", async (req, res) => {
             const { id: projectId, updateId } = req.params;
+            const reqUsername = req.user.username;
+
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId);
+                if (!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
+                // Permitir solo a los admins o miembros del proyecto
+                if(!await project.userIsMember(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 const existingUpdate = await projectsManager.findProjectUpdateById(updateId, projectId);
                 if (!existingUpdate) {
                     return res.status(404).json({ error: "Project update not found" });
@@ -768,10 +847,19 @@ class ProjectsRouter {
 
         router.delete("/:id/updates/:updateId", async (req, res) => {
             const { id: projectId, updateId } = req.params;
+            const reqUsername = req.user.username
+
             try {
-                if (!await projectsManager.findProjectById(projectId)) {
+                const project = await projectsManager.findProjectById(projectId)
+                if (!project) {
                     return res.status(404).json({ error: "Project not found" });
                 }
+
+                // Permitir solo a los admins o miembros del proyecto
+                if(!await project.userIsMember(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 const existingUpdate = await projectsManager.findProjectUpdateById(updateId, projectId);
                 if (!existingUpdate) {
                     return res.status(404).json({ error: "Project update not found" });
@@ -786,7 +874,19 @@ class ProjectsRouter {
 
         router.put("/:id/update", async (req, res) => {
             const projectId = req.params.id;
+            const reqUsername = req.user.username;
+            
             try {
+                const project = await projectsManager.findProjectById(projectId);
+                if (!project) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+    
+                // Permitir solo a los admins o owners del proyecto
+                if(!project.userIsOwner(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 const updatedProject = await projectsManager.updateProject(projectId, req.body);
                 if (updatedProject) {
                     res.json(updatedProject);
@@ -801,7 +901,18 @@ class ProjectsRouter {
 
         router.delete("/:id/delete", async (req, res) => {
             const projectId = req.params.id;
+            const reqUsername = req.user.username
             try {
+                const project = await projectsManager.findProjectById(projectId);
+                if (!project) {
+                    return res.status(404).json({ error: "Project not found" });
+                }
+    
+                // Permitir solo a los admins o owners del proyecto
+                if(!project.userIsOwner(reqUsername) && req.user.role !== "admin") {
+                    return res.status(403).json({ error: "Forbidden" });
+                }
+
                 const deleted = await projectsManager.deleteProject(projectId);
                 if (deleted) {
                     res.json({ message: "Project deleted successfully" });
