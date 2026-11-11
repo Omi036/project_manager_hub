@@ -9,6 +9,7 @@ Human labor was used for structuring, polishing the interface and refactoring th
 1. Clone this repo: `git clone https://github.com/Omi036/project_manager_hub`
 2. Copy `.env.example` to `.env` and fill with your data.
 3. Import the `server/setup.sql` file to your MySQL database.
-4. Finally, run the server entry point (main.js): `node main.js`
-5. Open the website in your brower via the specified host and port in the `.env` file.
+4. Install the dependencies `npm i`
+5. Finally, run the server entry point (main.js): `node main.js`
+6. Open the website in your brower via the specified host and port in the `.env` file.
 
