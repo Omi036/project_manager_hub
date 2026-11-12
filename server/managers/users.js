@@ -59,8 +59,8 @@ class UsersManager {
             userData.username,
             userData.nick,
             userData.role,
-            userData.discord_id ?? userData.discordId ?? null,
-            userData.avatar_url ?? userData.avatarUrl ?? null,
+            userData.discord_id ?? null,
+            userData.avatar_url ?? null,
         ]);
         return this.findUserByUsername(userData.username);
     }
@@ -89,8 +89,8 @@ class UsersManager {
         const fields = Object.entries({
             nick: updatedData.nick,
             role: updatedData.role,  
-            discord_id: updatedData.discord_id ?? updatedData.discordId,
-            avatar_url: updatedData.avatar_url ?? updatedData.avatarUrl,
+            discord_id: updatedData.discord_id,
+            avatar_url: updatedData.avatar_url,
         }).filter(([, value]) => value !== undefined);
 
         if (!fields.length) return this.findUserByUsername(username);
@@ -220,10 +220,7 @@ class UsersRouter {
                 // Only allow admins to change user Discord IDs
                 const hasDiscordIdField = req.body !== null
                     && typeof req.body === "object"
-                    && (
-                           Object.prototype.hasOwnProperty.call(req.body, "discord_id")
-                        || Object.prototype.hasOwnProperty.call(req.body, "discordId")
-                    );
+                    && Object.prototype.hasOwnProperty.call(req.body, "discord_id")
 
                 if (hasDiscordIdField && req.user.role !== "admin") {
                     return res.status(403).json({ error: "Forbidden: Only admins can change Discord IDs." });   

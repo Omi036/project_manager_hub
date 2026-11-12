@@ -12,7 +12,7 @@ const esc = (text) =>
 
 // Obtiene la URL del avatar de un usuario, si existe y es válida.
 const avatarUrl = (user) => {
-    const url = user?.avatar_url || user?.avatarUrl;
+    const url = user?.avatar_url;
     return typeof url === "string" && url.startsWith("https://cdn.discordapp.com/") ? url : null;
 };
 
