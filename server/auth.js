@@ -8,7 +8,8 @@ const DISCORD_USER_URL = "https://discord.com/api/users/@me";
 const STATE_COOKIE = "discord_oauth_state";
 const SESSION_COOKIE = "session";
 
-// Warns if required environment variables are missing
+
+// Returns the required variable and if not found raise an exception
 function requiredEnv(name) {
     const value = process.env[name];
     if (!value) throw new Error(`Missing required environment variable: ${name}`);
@@ -21,10 +22,11 @@ function cookieOptions(maxAge) {
         "Path=/",
         "HttpOnly",
         "SameSite=Lax",
-        ...(process.env.NODE_ENV === "production" ? ["Secure"] : []),
+        ...(process.env.COOKIE_SECURE === "true" ? ["Secure"] : []),
         `Max-Age=${maxAge}`,
     ].join("; ");
 }
+
 
 // Parses the cookies from the request headers into an object
 function parseCookies(request) {
@@ -33,9 +35,11 @@ function parseCookies(request) {
         .split(";")
         .filter(Boolean)
         .map((part) => {
+            // Split the cookie string into name and value, handling cases where '=' may not be present
             const separator = part.indexOf("=");
             if (separator < 0) return [part.trim(), ""];
         
+            // Returns the name and value of the cookie, decoding the value from the url format
             return [
                 part.slice(0, separator).trim(),
                 decodeURIComponent(part.slice(separator + 1).trim()),
@@ -45,10 +49,12 @@ function parseCookies(request) {
     return Object.fromEntries(cookiePairs);
 }
 
+
 function hashToken(token) {
     return createHash("sha256").update(token).digest("hex");
 }
 
+// Checks if the provided state matches the expected state in a time-safe manner
 function safeStateMatches(expected, received) {
     if (!expected || !received) return false;
     const expectedBuffer = Buffer.from(expected);
@@ -64,10 +70,12 @@ function usernameBase(discordUser) {
     return (normalized || `discord_${discordUser.id}`).slice(0, 50);
 }
 
+// Returns the avatar url from a User Object 
 function avatarUrl(discordUser) {
     if (!discordUser.avatar) return null;
     return `https://cdn.discordapp.com/avatars/${encodeURIComponent(discordUser.id)}/${encodeURIComponent(discordUser.avatar)}.png?size=128`;
 }
+
 
 async function findOrCreateUser(connection, discordUser) {
     const [existingRows] = await connection.execute(
@@ -122,6 +130,7 @@ async function findOrCreateUser(connection, discordUser) {
     throw new Error("Unable to allocate a unique username for the Discord user");
 }
 
+// Retrieves the authenticated user from the session token in the request cookies
 async function getAuthenticatedUser(pool, request) {
     const sessionToken = parseCookies(request)[SESSION_COOKIE];
     if (!sessionToken) return null;
@@ -136,19 +145,6 @@ async function getAuthenticatedUser(pool, request) {
     return rows[0] || null;
 }
 
-function createAuthMiddleware(pool) {
-    return async (request, response, next) => {
-        try {
-            const user = await getAuthenticatedUser(pool, request);
-            if (!user) return response.status(401).json({ error: "Authentication required" });
-
-            request.user = user;
-            return next();
-        } catch (error) {
-            return next(error);
-        }
-    };
-}
 
 // Exchanges the Discord OAuth code for an access token
 async function exchangeCode(code) {
@@ -184,10 +180,32 @@ async function getDiscordUser(accessToken) {
 }
 
 
+// Creates an Express middleware for handling session authentication
+function createAuthMiddleware(pool, { publicGetAllRoutes = [] } = {}) {
+    const publicRoutes = new Set(publicGetAllRoutes);
+
+    return async (request, response, next) => {
+        // Skip the auth if a route is whitelisted
+        if (request.method === "GET" && publicRoutes.has(request.path)) {
+            return next();
+        }
+
+        try {
+            // Checks that the user is authenticated
+            const user = await getAuthenticatedUser(pool, request);
+            if (!user) return response.status(401).json({ error: "Authentication required" });
+
+            request.user = user;
+            return next();
+        } catch (error) {
+            return next(error);
+        }
+    };
+}
 
 
 
-// Creates an Express router for handling authentication routes
+// Creates an Express router for handling Discord authentication routes
 function createAuthRouter(pool) {
     const router = express.Router();
     const sessionTtl = Number(process.env.SESSION_TTL_SECONDS || 604800);

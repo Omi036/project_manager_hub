@@ -128,26 +128,42 @@ class NewsRouter {
     static createRouter(newsManager) {
         const router = express.Router();
 
+        /**
+         * GET /all
+         * Retrieves all news items.
+         */
         router.get("/all", async (req, res) => {
             try {
                 res.json(await newsManager.getNews());
+
             } catch (error) {
                 console.error("Error fetching news:", error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * GET /:id
+         * @param {string} id - The ID of the news item to retrieve.
+         * Retrieves a news item by its ID.
+         */
         router.get("/:id", async (req, res) => {
             try {
                 const news = await newsManager.findNewsById(req.params.id);
                 if (!news) return res.status(404).json({ error: "News item not found" });
                 res.json(news);
+
             } catch (error) {
                 console.error(`Error fetching news item ${req.params.id}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * POST /create
+         * @body {Object} newsData - The data for the new news item.
+         * Creates a news item. Only admins can perform this action.
+         */
         router.post("/create", async (req, res) => {
             try {
                 if(req.user.role !== "admin") {
@@ -158,12 +174,19 @@ class NewsRouter {
                     ...req.body,
                     created_by: req.user.username,
                 }));
+
             } catch (error) {
                 console.error("Error creating news:", error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error creating news item" });
             }
         });
 
+        /**
+         * PUT /:id/update
+         * @param {string} id - The ID of the news item to update.
+         * @body {Object} updatedData - The fields to update.
+         * Updates a news item. Only admins can perform this action.
+         */
         router.put("/:id/update", async (req, res) => {
             try {
                 if(req.user.role !== "admin") {
@@ -173,12 +196,18 @@ class NewsRouter {
                 const news = await newsManager.updateNews(req.params.id, req.body);
                 if (!news) return res.status(404).json({ error: "News item not found" });
                 res.json(news);
+
             } catch (error) {
                 console.error(`Error updating news item ${req.params.id}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error updating news item" });
             }
         });
 
+        /**
+         * DELETE /:id/delete
+         * @param {string} id - The ID of the news item to delete.
+         * Deletes a news item. Only admins can perform this action.
+         */
         router.delete("/:id/delete", async (req, res) => {
             try {
                 if(req.user.role !== "admin") {
@@ -189,6 +218,7 @@ class NewsRouter {
                     return res.status(404).json({ error: "News item not found" });
                 }
                 res.json({ message: "News item deleted successfully" });
+                
             } catch (error) {
                 console.error(`Error deleting news item ${req.params.id}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });

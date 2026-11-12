@@ -606,6 +606,10 @@ class ProjectsRouter {
     static createRouter(projectsManager) {
         const router = express.Router();
 
+        /**
+         * GET /all
+         * Retrieves all projects.
+         */
         router.get("/all", async (req, res) => {
             try {
                 const projects = await projectsManager.getProjects();
@@ -617,6 +621,11 @@ class ProjectsRouter {
             }
         });
 
+        /**
+         * GET /:id
+         * @param {string} id - The ID of the project to retrieve.
+         * Retrieves a project by its ID.
+         */
         router.get("/:id", async (req, res) => {
             const projectId = req.params.id;
             try {
@@ -632,19 +641,32 @@ class ProjectsRouter {
             }
         });
 
+        /**
+         * POST /create
+         * @body {Object} projectData - The data for the new project.
+         * Creates a project owned by the authenticated user.
+         */
         router.post("/create", async (req, res) => {
             try {
                 const newProject = await projectsManager.createProject({
                     ...req.body,
+                    owner_username: req.user.username,
+                    owner_name: req.user.nick || req.user.username,
                     created_by: req.user.username,
                 });
                 res.status(201).json(newProject);
+                
             } catch (error) {
                 console.error("Error creating project:", error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error creating project" });
             }
         });
 
+        /**
+         * GET /:id/collaborators
+         * @param {string} id - The ID of the project.
+         * Retrieves the project's collaborators.
+         */
         router.get("/:id/collaborators", async (req, res) => {
             const projectId = req.params.id;
             try {
@@ -656,6 +678,12 @@ class ProjectsRouter {
             }
         });
 
+        /**
+         * POST /:id/collaborators
+         * @param {string} id - The ID of the project.
+         * @body {Object} collaborator - The collaborator to add.
+         * Adds a collaborator. Only the project owner or an admin can perform this action.
+         */
         router.post("/:id/collaborators", async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username
@@ -675,10 +703,16 @@ class ProjectsRouter {
                 res.status(201).json(collaborator);
             } catch (error) {
                 console.error(`Error adding collaborator to project ID ${projectId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error adding collaborator" });
             }
         });
 
+        /**
+         * DELETE /:id/collaborators
+         * @param {string} id - The ID of the project.
+         * @body {Object} collaborator - The collaborator to remove.
+         * Removes a collaborator. Only the project owner or an admin can perform this action.
+         */
         router.delete("/:id/collaborators", async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username
@@ -703,21 +737,33 @@ class ProjectsRouter {
                 res.status(204).send();
             } catch (error) {
                 console.error(`Error removing collaborator from project ID ${projectId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error removing collaborator" });
             }
         });
 
+        /**
+         * GET /:id/funding
+         * @param {string} id - The ID of the project.
+         * Retrieves the project's funding entries.
+         */
         router.get("/:id/funding", async (req, res) => {
             const projectId = req.params.id;
             try {
                 const funding = await projectsManager.getProjectFunding(projectId);
                 res.json(funding);
+
             } catch (error) {
                 console.error(`Error fetching funding for project ID ${projectId}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * POST /:id/funding
+         * @param {string} id - The ID of the project.
+         * @body {Object} funding - The funding entry to add.
+         * Adds a funding entry. Only project members or an admin can perform this action.
+         */
         router.post("/:id/funding", async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username;
@@ -735,12 +781,19 @@ class ProjectsRouter {
                 
                 const funding = await projectsManager.addProjectFunding(projectId, req.body);
                 res.status(201).json(funding);
+
             } catch (error) {
                 console.error(`Error adding funding to project ID ${projectId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error adding funding" });
             }
         });
 
+        /**
+         * DELETE /:id/funding/:fundingId
+         * @param {string} id - The ID of the project.
+         * @param {number|string} fundingId - The ID of the funding entry to remove.
+         * Removes a funding entry. Only project members or an admin can perform this action.
+         */
         router.delete("/:id/funding/:fundingId", async (req, res) => {
             const { id: projectId, fundingId } = req.params;
             const reqUsername = req.user.username;
@@ -760,12 +813,18 @@ class ProjectsRouter {
                 const removed = await projectsManager.removeProjectFunding(projectId, fundingId);
                 if (!removed) return res.status(404).json({ error: "Funding entry not found" });
                 res.status(204).send();
+
             } catch (error) {
                 console.error(`Error removing funding from project ID ${projectId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error removing funding" });
             }
         });
 
+        /**
+         * GET /:id/updates
+         * @param {string} id - The ID of the project.
+         * Retrieves the project's updates.
+         */
         router.get("/:id/updates", async (req, res) => {
             const projectId = req.params.id;
             try {
@@ -775,11 +834,18 @@ class ProjectsRouter {
 
                 res.json(await projectsManager.getProjectUpdates(projectId));
             } catch (error) {
+
                 console.error(`Error fetching updates for project ID ${projectId}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * GET /:id/updates/:updateId
+         * @param {string} id - The ID of the project.
+         * @param {string} updateId - The ID of the project update to retrieve.
+         * Retrieves a project update.
+         */
         router.get("/:id/updates/:updateId", async (req, res) => {
             const { id: projectId, updateId } = req.params;
             try {
@@ -789,12 +855,19 @@ class ProjectsRouter {
                 const update = await projectsManager.findProjectUpdateById(updateId, projectId);
                 if (!update) return res.status(404).json({ error: "Project update not found" });
                 res.json(update);
+
             } catch (error) {
                 console.error(`Error fetching project update ${updateId}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * POST /:id/updates
+         * @param {string} id - The ID of the project.
+         * @body {Object} updateData - The data for the new project update.
+         * Creates a project update. Only project members or an admin can perform this action.
+         */
         router.post("/:id/updates", async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username;
@@ -810,15 +883,21 @@ class ProjectsRouter {
                     return res.status(403).json({ error: "Forbidden" });
                 }
                 
-                res.status(201).json(
-                    await projectsManager.createProjectUpdate(projectId, req.body),
-                );
+                res.status(201).json(await projectsManager.createProjectUpdate(projectId, req.body));
+
             } catch (error) {
                 console.error(`Error creating update for project ID ${projectId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error creating project update" });
             }
         });
 
+        /**
+         * PUT /:id/updates/:updateId
+         * @param {string} id - The ID of the project.
+         * @param {string} updateId - The ID of the project update to update.
+         * @body {Object} updatedData - The fields to update.
+         * Updates a project update. Only project members or an admin can perform this action.
+         */
         router.put("/:id/updates/:updateId", async (req, res) => {
             const { id: projectId, updateId } = req.params;
             const reqUsername = req.user.username;
@@ -839,12 +918,19 @@ class ProjectsRouter {
                     return res.status(404).json({ error: "Project update not found" });
                 }
                 res.json(await projectsManager.updateProjectUpdate(updateId, req.body));
+
             } catch (error) {
                 console.error(`Error updating project update ${updateId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error updating project update" });
             }
         });
 
+        /**
+         * DELETE /:id/updates/:updateId
+         * @param {string} id - The ID of the project.
+         * @param {string} updateId - The ID of the project update to delete.
+         * Deletes a project update. Only project members or an admin can perform this action.
+         */
         router.delete("/:id/updates/:updateId", async (req, res) => {
             const { id: projectId, updateId } = req.params;
             const reqUsername = req.user.username
@@ -866,12 +952,19 @@ class ProjectsRouter {
                 }
                 await projectsManager.deleteProjectUpdate(updateId);
                 res.json({ message: "Project update deleted successfully" });
+
             } catch (error) {
                 console.error(`Error deleting project update ${updateId}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * PUT /:id/update
+         * @param {string} id - The ID of the project to update.
+         * @body {Object} updatedData - The fields and relations to update.
+         * Updates a project. Only the project owner or an admin can perform this action.
+         */
         router.put("/:id/update", async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username;
@@ -893,12 +986,18 @@ class ProjectsRouter {
                 } else {
                     res.status(404).json({ error: "Project not found" });
                 }
+
             } catch (error) {
                 console.error(`Error updating project with ID ${projectId}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error updating project" });
             }
         });
 
+        /**
+         * DELETE /:id/delete
+         * @param {string} id - The ID of the project to delete.
+         * Deletes a project. Only the project owner or an admin can perform this action.
+         */
         router.delete("/:id/delete", async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username
@@ -919,6 +1018,7 @@ class ProjectsRouter {
                 } else {
                     res.status(404).json({ error: "Project not found" });
                 }
+                
             } catch (error) {
                 console.error(`Error deleting project with ID ${projectId}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });

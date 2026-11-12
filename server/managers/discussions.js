@@ -206,38 +206,61 @@ class DiscussionsRouter {
     static createRouter(discussionsManager) {
         const router = express.Router();
 
+        /**
+         * GET /all
+         * Retrieves all discussions.
+         */
         router.get("/all", async (req, res) => {
             try {
                 res.json(await discussionsManager.getDiscussions());
+
             } catch (error) {
                 console.error("Error fetching discussions:", error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * GET /:id
+         * @param {string} id - The ID of the discussion to retrieve.
+         * Retrieves a discussion by its ID.
+         */
         router.get("/:id", async (req, res) => {
             try {
                 const discussion = await discussionsManager.findDiscussionById(req.params.id);
                 if (!discussion) return res.status(404).json({ error: "Discussion not found" });
                 res.json(discussion);
+
             } catch (error) {
                 console.error(`Error fetching discussion ${req.params.id}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * POST /create
+         * @body {Object} discussionData - The data for the new discussion.
+         * Creates a discussion owned by the authenticated user.
+         */
         router.post("/create", async (req, res) => {
             try {
                 res.status(201).json(await discussionsManager.createDiscussion({
                     ...req.body,
                     owner: req.user.username,
                 }));
+
             } catch (error) {
                 console.error("Error creating discussion:", error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error creating discussion" });
             }
         });
 
+        /**
+         * PUT /:id/update
+         * @param {string} id - The ID of the discussion to update.
+         * @body {Object} updatedData - The fields to update.
+         * Updates a discussion. Only its owner or an admin can perform this action.
+         */
         router.put("/:id/update", async (req, res) => {
             try {
                 const discussion = await discussionsManager.findDiscussionById(req.params.id);
@@ -248,12 +271,18 @@ class DiscussionsRouter {
                 const updatedDiscussion = await discussionsManager.updateDiscussion(req.params.id, req.body);
                 if (!updatedDiscussion) return res.status(404).json({ error: "Discussion not found" });
                 res.json(updatedDiscussion);
+
             } catch (error) {
                 console.error(`Error updating discussion ${req.params.id}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error updating discussion" });
             }
         });
 
+        /**
+         * DELETE /:id/delete
+         * @param {string} id - The ID of the discussion to delete.
+         * Deletes a discussion. Only its owner or an admin can perform this action.
+         */
         router.delete("/:id/delete", async (req, res) => {
             try {
                 const discussion = await discussionsManager.findDiscussionById(req.params.id);
@@ -265,24 +294,37 @@ class DiscussionsRouter {
                     return res.status(404).json({ error: "Discussion not found" });
                 }
                 res.json({ message: "Discussion deleted successfully" });
+
             } catch (error) {
                 console.error(`Error deleting discussion ${req.params.id}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * GET /:id/messages
+         * @param {string} id - The ID of the discussion.
+         * Retrieves all messages in a discussion.
+         */
         router.get("/:id/messages", async (req, res) => {
             try {
                 if (!await discussionsManager.findDiscussionById(req.params.id)) {
                     return res.status(404).json({ error: "Discussion not found" });
                 }
                 res.json(await discussionsManager.getMessages(req.params.id));
+
             } catch (error) {
                 console.error(`Error fetching messages for discussion ${req.params.id}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
         });
 
+        /**
+         * POST /:id/messages
+         * @param {string} id - The ID of the discussion.
+         * @body {Object} messageData - The data for the new message.
+         * Creates a message in a discussion.
+         */
         router.post("/:id/messages", async (req, res) => {
             try {
                 if (!await discussionsManager.findDiscussionById(req.params.id)) {
@@ -293,12 +335,19 @@ class DiscussionsRouter {
                     discussion_id: req.params.id,
                     author: req.user.username,
                 }));
+
             } catch (error) {
                 console.error(`Error creating message for discussion ${req.params.id}:`, error);
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: "Error creating message" });
             }
         });
 
+        /**
+         * DELETE /:id/messages/:messageId
+         * @param {string} id - The ID of the discussion.
+         * @param {string} messageId - The ID of the message to delete.
+         * Deletes a message. Only its author or an admin can perform this action.
+         */
         router.delete("/:id/messages/:messageId", async (req, res) => {
             try {
                 const message = await discussionsManager.getMessageById(req.params.messageId);
@@ -321,6 +370,7 @@ class DiscussionsRouter {
                     return res.status(404).json({ error: "Message not found" });
                 }
                 res.json({ message: "Message deleted successfully" });
+                
             } catch (error) {
                 console.error(`Error deleting message ${req.params.messageId}:`, error);
                 res.status(500).json({ error: "Internal Server Error" });
