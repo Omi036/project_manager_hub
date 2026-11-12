@@ -1,52 +1,6 @@
 // ===== 02-data.js =====
 // Persistencia y modelo de datos. Se carga antes de las vistas que usan la API.
 
-function buildSampleProjects() {
-    return [
-        {
-            id: "pmcdemo",
-            title: "[MINECRAFT] Servidor Create",
-            icon: "tabler:cube",
-            iconColor: "#16a34a",
-            status: "En progreso",
-            createdAt: "2026-10-20T09:00:00.000Z",
-            owner: "Lucía Márquez",
-            collabs: ["Andrés", "Marta"],
-            tags: ["minecraft", "create", "servidor"],
-            funding: [
-                { who: "Andrés", what: "Hosting del servidor (VPS)" },
-                { who: "Marta", what: "25 €/mes" },
-            ],
-            updates: [
-                {
-                    id: "umcdemo",
-                    title: "Servidor en línea",
-                    date: "2026-11-02T18:00:00.000Z",
-                    desc: "El servidor ya está **activo** con el modpack *Create*.\n\n- Whitelist abierta\n- Mapa base generado",
-                },
-            ],
-            desc: "## Objetivo\nMontar un servidor de **Minecraft** con el mod *Create* para la comunidad.\n\n- Modpack y configuración\n- Normas y whitelist\n- Copias de seguridad semanales\n\n> Las ideas se hablan en el hilo de discusión.",
-        },
-        {
-            id: "pgfdemo",
-            title: "[2027] MorenoGameFest",
-            icon: "tabler:device-gamepad-2",
-            iconColor: "#7c3aed",
-            status: "Ideado",
-            createdAt: "2026-10-30T09:00:00.000Z",
-            owner: "Pablo Ruiz",
-            collabs: ["Sofía", "Lucía Márquez"],
-            tags: ["evento", "videojuegos", "2027"],
-            funding: [
-                { who: "Ayuntamiento", what: "Cesión del pabellón" },
-                { who: "Pablo", what: "300 €" },
-            ],
-            updates: [],
-            desc: "## Idea\nOrganizar el **MorenoGameFest** de 2027: torneos, zona *indie* y rincón retro.\n\n- Buscar sede y fechas\n- Contactar con desarrolladores\n- Plan de patrocinios",
-        },
-    ];
-}
-
 class API {
     static #me = "lucia_m";
     static #authenticated = false;
@@ -76,7 +30,6 @@ class API {
     }
 
     static #storageKeys = {
-        projects: "gestor-proyectos-v1",
         discussions: "gestor-discusiones-v1",
         settings: "gestor-ajustes-v1",
     };
@@ -85,6 +38,7 @@ class API {
     static #discussions = [];
     static #news = [];
     static #discussionError = null;
+    static #projectsError = null;
     static #discussionsLoading = false;
 
     // URL del API. Puede sobrescribirse con window.API_BASE_URL en despliegues separados.
@@ -126,54 +80,72 @@ class API {
         }
     }
 
-    // Guarda los datos actuales en el almacenamiento local.
-    static #persist() {
-        try {
-            localStorage.setItem(
-                API.#storageKeys.projects,
-                JSON.stringify(API.#projects),
-            );
-            localStorage.setItem(
-                API.#storageKeys.discussions,
-                JSON.stringify(API.#discussions),
-            );
-        } catch (error) {}
-    }
-
-    static #timestamp() { return new Date().toISOString() }
-    static #legacySampleIds = ["p1demo", "p2demo", "n1demo"];
-
-    static #replaceLegacySamples(stored, buildSamples) {
-        if (!Array.isArray(stored)) return buildSamples();
-
-        const kept = stored.filter((item) => !API.#legacySampleIds.includes(item.id));
-        return kept.length === stored.length
-            ? stored
-            : [...buildSamples(), ...kept];
-    }
-
-
     static loadData() {
-        // Lee los proyectos locales mientras las colecciones respaldadas por el servidor se cargan.
-        const storedProjects = API.#readStorage(API.#storageKeys.projects);
-
-        API.#projects.splice(0, API.#projects.length, ...API.#replaceLegacySamples(storedProjects, buildSampleProjects));
+        API.#projects.length = 0;
         API.#discussions.length = 0;
         API.#news.length = 0;
-
-        // Asegura que cada proyecto tenga los campos necesarios y valores por defecto.
-        API.#projects.forEach((project) => {
-            project.createdAt = project.createdAt || API.#timestamp();
-            project.status = project.status || STATUS[0];
-            project.updates = project.updates || [];
-            project.tags = project.tags || [];
-        });
 
         return {
             projects: API.#projects,
             discussions: API.#discussions,
             news: API.#news,
         };
+    }
+
+    static get projectsError() { return API.#projectsError }
+
+    static #normalizeProject(project, relations = {}) {
+        return {
+            id: project.id,
+            title: project.title,
+            icon: project.icon || "tabler:rocket",
+            iconColor: project.icon_color ?? project.iconColor ?? "#2d4ca3",
+            status: project.status || STATUS[0],
+            desc: project.description ?? project.desc ?? "",
+            owner: project.owner_name ?? project.owner ?? "",
+            ownerUsername: project.owner_username ?? project.ownerUsername ?? null,
+            createdAt: project.created_at ?? project.createdAt,
+            createdBy: project.created_by ?? project.createdBy,
+            tags: Array.isArray(project.tags)
+                ? project.tags
+                : String(project.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean),
+            collabs: relations.collabs ?? project.collabs ?? [],
+            funding: relations.funding ?? project.funding ?? [],
+            updates: relations.updates ?? project.updates ?? [],
+        };
+    }
+
+    static async #hydrateProject(project) {
+        const [collabs, funding, updates] = await Promise.all([
+            API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/collaborators`),
+            API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/funding`),
+            API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/updates`),
+        ]);
+        return API.#normalizeProject(project, {
+            collabs: collabs.map((collaborator) => collaborator.name ?? collaborator),
+            funding,
+            updates: updates.map((update) => ({
+                id: update.id,
+                title: update.title,
+                desc: update.description ?? update.desc ?? "",
+                date: update.created_at ?? update.createdAt,
+            })),
+        });
+    }
+
+    static async loadProjects() {
+        API.#projectsError = null;
+        try {
+            const response = await API.#requestJson("/api/projects/all");
+            if (!Array.isArray(response)) throw new Error("La API devolvió proyectos inválidos");
+            const hydrated = await Promise.all(response.map((project) => API.#hydrateProject(project)));
+            API.#projects.splice(0, API.#projects.length, ...hydrated);
+            return API.#projects;
+        } catch (error) {
+            API.#projectsError = error;
+            console.error("No se pudieron cargar los proyectos:", error);
+            throw error;
+        }
     }
 
     static #normalizeNews(item) {
@@ -346,7 +318,7 @@ class API {
     static canDelete(item, actorUsername = API.ME) {
         if (!item) return false;
 
-        const creatorUsername = resolveUser(item.createdBy || item.owner).username;
+        const creatorUsername = item.createdBy || item.ownerUsername || resolveUser(item.owner).username;
         return actorUsername === creatorUsername || API.isAdmin(actorUsername);
     }
 
@@ -402,43 +374,39 @@ class API {
     }
 
     // Crea un proyecto nuevo y lo agrega a la lista de proyectos.
-    static createProject(fields) {
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        const projectData = {
-            ...fields,
-            id: uid(),
-            createdAt: API.#timestamp(),
-            createdBy: API.ME,
+    static async createProject(fields) {
+        const project = await API.#requestJson("/api/projects/create", {
+            method: "POST",
+            body: JSON.stringify({ ...fields, description: fields.desc }),
+        });
+        const normalized = API.#normalizeProject(project, {
+            collabs: fields.collabs || [],
+            funding: fields.funding || [],
             updates: [],
-        };
-
-        API.#projects.push(projectData);
-        API.#persist();
-        return projectData;
+        });
+        API.#projects.unshift(normalized);
+        return normalized;
     }
 
     // Actualiza un proyecto existente con nuevos valores.
-    static updateProject(projectId, changes) {
-        // Encuentra el proyecto por su ID y verifica si el usuario tiene permisos para actualizarlo.
-        const project = API.findProject(projectId);
-        if (!project) return null;
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        Object.assign(project, changes);
-        API.#persist();
-        return project;
+    static async updateProject(projectId, changes) {
+        const project = await API.#requestJson(`/api/projects/${encodeURIComponent(projectId)}/update`, {
+            method: "PUT",
+            body: JSON.stringify({ ...changes, description: changes.desc }),
+        });
+        const normalized = await API.#hydrateProject(project);
+        const position = API.#projects.findIndex((entry) => entry.id === projectId);
+        if (position >= 0) API.#projects.splice(position, 1, normalized);
+        return normalized;
     }
 
     // Elimina un proyecto existente si el usuario tiene permisos de administrador o es el propietario.
-    static deleteProject(projectId) {
-        // Encuentra el proyecto por su ID y verifica si el usuario tiene permisos para eliminarlo.
-        if (!API.canDelete(API.findProject(projectId))) return false;
+    static async deleteProject(projectId) {
+        await API.#requestJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, {
+            method: "DELETE",
+        });
         const position = API.#projects.findIndex((project) => project.id === projectId);
-        if (position < 0) return false;
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.#projects.splice(position, 1);
-        API.#persist();
+        if (position >= 0) API.#projects.splice(position, 1);
         return true;
     }
 
@@ -448,39 +416,46 @@ class API {
     // ==== UPDATES ====
 
     // Crea una actualización de proyecto y la agrega a la lista de actualizaciones del proyecto.
-    static createUpdate(projectId, { title, description }) {
+    static async createUpdate(projectId, { title, description }) {
+        const update = await API.#requestJson(`/api/projects/${encodeURIComponent(projectId)}/updates`, {
+            method: "POST",
+            body: JSON.stringify({ title, description }),
+        });
         const projectUpdate = {
-            id: uid(),
-            title,
-            desc: description,
-            date: API.#timestamp(),
+            id: update.id,
+            title: update.title,
+            desc: update.description ?? update.desc ?? "",
+            date: update.created_at ?? update.createdAt,
         };
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.findProject(projectId).updates.push(projectUpdate);
-        API.#persist();
+        API.findProject(projectId)?.updates.unshift(projectUpdate);
         return projectUpdate;
     }
 
     // Actualiza una actualización de proyecto existente con nuevos valores.
-    static updateUpdate(projectId, updateId, { title, description }) {
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        //! TODO: CUALQUIERA PUEDE ACTUALIZAR UNA ACTUALIZACIÓN, NO SOLO EL PROPIETARIO DEL PROYECTO. SE DEBERÍA RESTRINGIR A ADMIN O PROPIETARIO O COLABORADOR DEL PROYECTO.
-
-        const projectUpdate = API.findProject(projectId).updates.find((entry) => entry.id === updateId);
-        Object.assign(projectUpdate, { title, desc: description });
-        API.#persist();
-
+    static async updateUpdate(projectId, updateId, { title, description }) {
+        const update = await API.#requestJson(`/api/projects/${encodeURIComponent(projectId)}/updates/${encodeURIComponent(updateId)}`, {
+            method: "PUT",
+            body: JSON.stringify({ title, description }),
+        });
+        const projectUpdate = {
+            id: update.id,
+            title: update.title,
+            desc: update.description ?? update.desc ?? "",
+            date: update.created_at ?? update.createdAt,
+        };
+        const project = API.findProject(projectId);
+        const position = project?.updates.findIndex((entry) => entry.id === updateId) ?? -1;
+        if (project && position >= 0) project.updates.splice(position, 1, projectUpdate);
         return projectUpdate;
     }
 
     // Elimina una actualización de proyecto existente si el usuario tiene permisos de administrador o es el propietario del proyecto.
-    static deleteUpdate(projectId, updateId) {
+    static async deleteUpdate(projectId, updateId) {
+        await API.#requestJson(`/api/projects/${encodeURIComponent(projectId)}/updates/${encodeURIComponent(updateId)}`, {
+            method: "DELETE",
+        });
         const project = API.findProject(projectId);
-        project.updates = project.updates.filter((entry) => entry.id !== updateId);
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.#persist();
+        if (project) project.updates = project.updates.filter((entry) => entry.id !== updateId);
     }
 
 

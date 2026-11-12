@@ -62,7 +62,7 @@ function renderPage() {
     }
 
     // Si el hash es "#proyecto-<ID>", renderiza la vista detallada del proyecto.
-    const projectMatch = location.hash.match(/^#proyecto-(\w+)$/);
+    const projectMatch = location.hash.match(/^#proyecto-([A-Za-z0-9_-]+)$/);
     const currentProject = projectMatch && API.findProject(projectMatch[1]);
     if (currentProject) {
         renderDetail(currentProject);
@@ -114,9 +114,9 @@ function renderProjects() {
     if (!projectsList.length) {
         app.innerHTML = `
         <div class="empty">
-            <h2>Aún no hay proyectos</h2>
-            <p>Crea el primero para verlo aquí.</p>
-            <button class="btn pri" data-new>+ Crear proyecto</button>
+            <h2>${API.projectsError ? "No se pudieron cargar los proyectos" : "Aún no hay proyectos"}</h2>
+            <p>${API.projectsError ? "Comprueba la conexión e inténtalo de nuevo." : "Crea el primero para verlo aquí."}</p>
+            ${API.projectsError ? '<button class="btn pri" data-retryprojects>Reintentar</button>' : '<button class="btn pri" data-new>+ Crear proyecto</button>'}
         </div>`;
         return;
     }
@@ -236,17 +236,17 @@ function renderDetail(project) {
                     <b>${esc(project.owner || "—")}</b>
                 </section>
                 
-                <section>
+                <section class="${project.tags && project.tags.length ? "" : "side-section--empty"}">
                     <h3>Etiquetas</h3>
                     ${tagsHtml(project.tags)}
                 </section>
 
-                <section>
+                <section class="${project.collabs.length ? "" : "side-section--empty"}">
                     <h3>Colaboradores</h3>
                     <div class="chips">${chips}</div>
                 </section>
 
-                <section>
+                <section class="${project.funding.length ? "" : "side-section--empty"}">
                     <h3>Financiación</h3>
                     ${fund}
                 </section>
@@ -424,6 +424,10 @@ document.addEventListener("click", (event) => {
     } else if (hasData("new")) {
         openForm();
 
+    // Reintentar la carga de proyectos desde el servidor.
+    } else if (hasData("retryprojects")) {
+        API.loadProjects().then(render).catch(() => render());
+
     // Regresar a la página de inicio
     } else if (hasData("back")) {
         location.hash = "";
@@ -436,9 +440,12 @@ document.addEventListener("click", (event) => {
     } else if (readData("del")) {
         const project = projects.find((project) => project.id === readData("del"));
         if (confirm(`¿Eliminar “${project.title}”? Esta acción no se puede deshacer.`)) {
-            API.deleteProject(project.id);
-            location.hash = "";
-            render();
+            API.deleteProject(project.id)
+                .then(() => {
+                    location.hash = "";
+                    render();
+                })
+                .catch((error) => alert(`No se pudo eliminar el proyecto: ${error.message}`));
         }
 
     // Abrir formulario de creación de update
@@ -455,8 +462,9 @@ document.addEventListener("click", (event) => {
         const projectUpdate = project.updates.find((update) => update.id === readData("delup"));
 
         if (confirm(`¿Eliminar el update “${projectUpdate.title}”?`)) {
-            API.deleteUpdate(project.id, projectUpdate.id);
-            render();
+            API.deleteUpdate(project.id, projectUpdate.id)
+                .then(render)
+                .catch((error) => alert(`No se pudo eliminar el update: ${error.message}`));
         }
 
     // Cerrar formulario de update
@@ -524,7 +532,7 @@ form.addEventListener("input", (event) => {
 
 
 // Maneja el envío del formulario del proyecto para crear o actualizar un proyecto.
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const title = $("#project_title_input").value.trim();
 
@@ -552,16 +560,17 @@ form.addEventListener("submit", (event) => {
     };
 
     // Establece que ejecutar si el proyecto es nuevo o si se está actualizando uno existente.
-    const project = projectDraft._new
-        ? API.createProject(fields)
-        : API.updateProject(projectDraft.id, fields);
+    try {
+        const project = projectDraft._new
+            ? await API.createProject(fields)
+            : await API.updateProject(projectDraft.id, fields);
 
-    // Cierra el dialogo
-    dlg.close();
-
-    // Si es un proyecto nuevo, cambia el hash de la URL para mostrar la vista detallada del proyecto recién creado.
-    if (projectDraft._new) location.hash = "proyecto-" + project.id;
-    else render();
+        dlg.close();
+        if (projectDraft._new) location.hash = "proyecto-" + project.id;
+        else render();
+    } catch (error) {
+        alert(`No se pudo guardar el proyecto: ${error.message}`);
+    }
 });
 
 
@@ -606,7 +615,7 @@ function openUp(projectId, updateId) {
 
 
 // Maneja el envío del formulario de update para crear o actualizar un update.
-uform.addEventListener("submit", (event) => {
+uform.addEventListener("submit", async (event) => {
     event.preventDefault();
     const title = $("#update_title_input").value.trim();
 
@@ -620,10 +629,15 @@ uform.addEventListener("submit", (event) => {
     const description = $("#update_description_input").value;
 
     // Si se está editando un update existente, actualiza el update; de lo contrario, crea un nuevo update.
-    if (updateTarget.updateId) API.updateUpdate(updateTarget.projectId, updateTarget.updateId, {title: title,description});
-    else API.createUpdate(updateTarget.projectId, {title: title,description});
-
-    // Cierra el diálogo del formulario de update y vuelve a renderizar la vista del proyecto.
-    udlg.close();
-    render();
+    try {
+        if (updateTarget.updateId) {
+            await API.updateUpdate(updateTarget.projectId, updateTarget.updateId, { title, description });
+        } else {
+            await API.createUpdate(updateTarget.projectId, { title, description });
+        }
+        udlg.close();
+        render();
+    } catch (error) {
+        alert(`No se pudo guardar el update: ${error.message}`);
+    }
 });

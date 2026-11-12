@@ -119,9 +119,15 @@ class MarkdownRenderer {
         // Función auxiliar para vaciar el párrafo acumulado y agregarlo al HTML.
         const flushParagraph = () => {
             if (paragraph.length) {
+                const renderedParagraph = paragraph
+                    .map((line) => {
+                        const hardBreak = / {2,}$/.test(line);
+                        return `<span class="md-line${hardBreak ? " md-line--hard-break" : ""}">${MarkdownRenderer.renderInline(line)}</span>`;
+                    })
+                    .join("");
                 html += `
                     <p>
-                        ${MarkdownRenderer.renderInline(paragraph.join("\n")).replace(/\n/g,keepLineBreaks ? "<br>" : " ",)}
+                        ${renderedParagraph}
                     </p>`;
                 paragraph = [];
             }
@@ -144,13 +150,15 @@ class MarkdownRenderer {
                 closeList();
 
                 const headingLevel = match[1].length + 1;
-                html += `<h${headingLevel}>${MarkdownRenderer.renderInline(match[2])}</h${headingLevel}>`;
+                const hardBreak = / {2,}$/.test(match[2]);
+                html += `<h${headingLevel} class="md-line${hardBreak ? " md-line--hard-break" : ""}">${MarkdownRenderer.renderInline(match[2])}</h${headingLevel}>`;
 
             // Texto secundario
             } else if ((match = line.match(/^\s*-#\s+(.*)/))) {
                 flushParagraph();
                 closeList();
-                html += `<p class="md-subtle">${MarkdownRenderer.renderInline(match[1])}</p>`;
+                const hardBreak = / {2,}$/.test(match[1]);
+                html += `<p class="md-subtle md-line${hardBreak ? " md-line--hard-break" : ""}">${MarkdownRenderer.renderInline(match[1])}</p>`;
 
             // Listas desordenadas
             } else if ((match = line.match(/^\s*[-*]\s+(.*)/))) {
@@ -183,8 +191,9 @@ class MarkdownRenderer {
                 flushParagraph();
                 closeList();
 
+                const hardBreak = / {2,}$/.test(match[1]);
                 html +=
-                    "<blockquote>" +
+                    `<blockquote class="md-line${hardBreak ? " md-line--hard-break" : ""}">` +
                     MarkdownRenderer.renderInline(match[1]) +
                     "</blockquote>";
 
@@ -192,12 +201,13 @@ class MarkdownRenderer {
             } else if (!line.trim()) {
                 flushParagraph();
                 closeList();
+                html += '<div class="md-empty" aria-hidden="true"></div>';
             
             // Cualquier otra línea se acumula en el párrafo actual
             } else {
                 // Cierra la lista (si existe) y comienza un nuevo párrafo
                 closeList();
-                paragraph.push(line.trim());
+                paragraph.push(line.trimStart());
             }
         }
 

@@ -62,7 +62,7 @@ app.use("/api", apiLimiter, createAuthMiddleware(pool, {
         "/discussions/all",
         "/news/all",
     ],
-    publicGetPrefixes: ["/discussions/"],
+    publicGetPrefixes: ["/discussions/", "/projects/"],
 }));
 
 // The API also serves as a web server

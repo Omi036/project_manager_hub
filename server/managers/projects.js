@@ -24,6 +24,22 @@ class Project {
         this.created_by = created_by;
     }
 
+    toJSON() {
+        return {
+            id: this.id,
+            title: this.title,
+            icon: this.icon,
+            icon_color: this.icon_color,
+            status: this.status,
+            description: this.description,
+            tags: this.tags,
+            owner_name: this.owner_name,
+            owner_username: this.owner_username,
+            created_at: this.created_at,
+            created_by: this.created_by,
+        };
+    }
+
     /** @returns {string[]} The project's tags. */
     getTags() { return this.tags }
     /** @returns {Promise<Object[]>} The project's collaborators. */
@@ -95,6 +111,16 @@ class ProjectUpdate {
         this.title = title;
         this.description = description;
         this.created_at = created_at;
+    }
+
+    toJSON() {
+        return {
+            id: this.id,
+            project_id: this.project_id,
+            title: this.title,
+            description: this.description,
+            created_at: this.created_at,
+        };
     }
 
     /**

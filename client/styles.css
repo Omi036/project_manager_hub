@@ -46,8 +46,8 @@ main{max-width:1040px;margin:0 auto;padding:32px 24px 64px}
 .fund li span:last-child{font-weight:700;text-align:right}
 .muted{color:var(--mute);box-sizing:border-box;padding:0 10px}
 .md{max-width:70ch}.md h2{font-size:1.5rem;margin:1.2em 0 .4em}.md h3{font-size:1.2rem;margin:1.1em 0 .3em}.md h4{margin:1em 0 .3em}
-.md :first-child{margin-top:0}.md code{background:var(--soft);padding:1px 6px;border-radius:5px;font-size:.9em}
-.md blockquote{margin:1em 0;padding-left:14px;border-left:3px solid var(--accent);color:var(--mute)}
+.md :first-child{margin-top:0}.md p,.md h2,.md h3,.md h4,.md ul,.md ol{margin-top:0;margin-bottom:0}.md code{background:var(--soft);padding:1px 6px;border-radius:5px;font-size:.9em}
+.md blockquote{margin:0;padding-left:14px;border-left:3px solid var(--accent);color:var(--mute)}
 .md a{color:var(--accent)}.md .md-subtle{color:var(--mute);font-size:.85em}
 dialog{border:0;border-radius:20px;padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
 dialog::backdrop{background:rgba(10,14,22,.55)}
@@ -129,6 +129,9 @@ select{width:100%;background:var(--bg);border:1px solid var(--line);border-radiu
 .mt{white-space:normal}
 .mt.md{max-width:none}
 .mt p{margin:0;line-height: 1.4}
+.md .md-empty{height:1.4em;margin:0}
+.md .md-line{display:block}
+.md .md-line--hard-break{margin-bottom:1.0em}
 .op{background:var(--accent);color:#fff;font-size:.7rem;font-weight:600;padding:1px 7px;border-radius:4px}
 .men{background:var(--soft);color:var(--accent);border-radius:4px;padding:0 4px;text-decoration:none;font-weight:500}
 .message_form{position:relative}
@@ -174,6 +177,7 @@ main{padding:14px 12px 40px}
 form{padding:16px;gap:14px}
 form h2{font-size:1.15rem}
 .emojis button{width:34px;height:34px;font-size:1.1rem}
+.side section.side-section--empty{display:none}
 }
 .actw,.acts{display:contents}
 .actbtn{display:none}
