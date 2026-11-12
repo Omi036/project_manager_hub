@@ -148,7 +148,9 @@ class NewsRouter {
          * @param {string} id - The ID of the news item to retrieve.
          * Retrieves a news item by its ID.
          */
-        router.get("/:id", async (req, res) => {
+        router.get("/:id", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             try {
                 const news = await newsManager.findNewsById(req.params.id);
                 if (!news) return res.status(404).json({ error: "News item not found" });

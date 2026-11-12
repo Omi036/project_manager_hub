@@ -48,6 +48,43 @@ test("rejects missing required fields with a 400 response", () => {
     });
 });
 
+test("rejects empty and whitespace-only required strings", () => {
+    const result = runMiddleware(validateJsonBody({
+        title: { type: "string", required: true },
+    }), { body: { title: "   " }, params: {}, query: {} });
+
+    assert.equal(result.nextCalled, false);
+    assert.deepEqual(result.responseBody.details, ["title is required"]);
+});
+
+test("requires each field in a funding entry", () => {
+    const middleware = validateRequest({
+        body: {
+            required: true,
+            fields: {
+                who: { type: "string" },
+                what: { type: "string" },
+                contributor: { type: "string" },
+                contribution: { type: "string" },
+            },
+            oneOfRequired: [
+                ["who", "contributor"],
+                ["what", "contribution"],
+            ],
+        },
+    });
+    const result = runMiddleware(middleware, {
+        body: { who: "Sponsor", what: "   " },
+        params: {},
+        query: {},
+    });
+
+    assert.equal(result.nextCalled, false);
+    assert.deepEqual(result.responseBody.details, [
+        "At least one of what, contribution is required",
+    ]);
+});
+
 test("rejects invalid route identifiers and query values", () => {
     const middleware = validateRequest({
         params: { id: { type: "identifier" } },

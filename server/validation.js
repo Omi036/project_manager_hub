@@ -9,7 +9,7 @@ function isPlainObject(value) {
  */
 function validateValue(value, rule, fieldName) {
     // Check for required fields
-    if (value === undefined) {
+    if (value === undefined || (rule.required && typeof value === "string" && !value.trim())) {
         return rule.required ? `${fieldName} is required` : null;
     }
 
@@ -94,9 +94,12 @@ function validateRequest({ body, params, query, custom } = {}) {
 
                 // Validate that at least one of the specified fields is present in the body
                 for (const fields of body.oneOfRequired || []) {
-                    if (!fields.some((field) => request.body[field] !== undefined
-                        && request.body[field] !== null
-                        && request.body[field] !== "")) {
+                    if (!fields.some((field) => {
+                        const value = request.body[field];
+                        return value !== undefined
+                            && value !== null
+                            && (typeof value !== "string" || value.trim() !== "");
+                    })) {
                         details.push(`At least one of ${fields.join(", ")} is required`);
                     }
                 }

@@ -156,7 +156,9 @@ class UsersRouter {
          * @param {string} username - The username of the user to retrieve.
          * Retrieves a user by their username. If the user is not found, returns a 404 error.
          */
-        router.get("/:username", async (req, res) => {
+        router.get("/:username", validateRequest({
+            params: { username: { type: "string", required: true, maxLength: 50 } },
+        }), async (req, res) => {
             try {
                 const user = await usersManager.findUserByUsername(req.params.username);
                 if (!user) return res.status(404).json({ error: "User not found" });

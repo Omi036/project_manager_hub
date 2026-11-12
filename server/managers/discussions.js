@@ -226,7 +226,9 @@ class DiscussionsRouter {
          * @param {string} id - The ID of the discussion to retrieve.
          * Retrieves a discussion by its ID.
          */
-        router.get("/:id", async (req, res) => {
+        router.get("/:id", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             try {
                 const discussion = await discussionsManager.findDiscussionById(req.params.id);
                 if (!discussion) return res.status(404).json({ error: "Discussion not found" });
@@ -322,7 +324,9 @@ class DiscussionsRouter {
          * @param {string} id - The ID of the discussion.
          * Retrieves all messages in a discussion.
          */
-        router.get("/:id/messages", async (req, res) => {
+        router.get("/:id/messages", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             try {
                 if (!await discussionsManager.findDiscussionById(req.params.id)) {
                     return res.status(404).json({ error: "Discussion not found" });

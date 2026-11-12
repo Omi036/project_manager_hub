@@ -627,7 +627,9 @@ class ProjectsRouter {
          * @param {string} id - The ID of the project to retrieve.
          * Retrieves a project by its ID.
          */
-        router.get("/:id", async (req, res) => {
+        router.get("/:id", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             const projectId = req.params.id;
             try {
                 const project = await projectsManager.findProjectById(projectId);
@@ -680,7 +682,9 @@ class ProjectsRouter {
          * @param {string} id - The ID of the project.
          * Retrieves the project's collaborators.
          */
-        router.get("/:id/collaborators", async (req, res) => {
+        router.get("/:id/collaborators", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             const projectId = req.params.id;
             try {
                 const collaborators = await projectsManager.getProjectCollaborators(projectId);
@@ -787,7 +791,9 @@ class ProjectsRouter {
          * @param {string} id - The ID of the project.
          * Retrieves the project's funding entries.
          */
-        router.get("/:id/funding", async (req, res) => {
+        router.get("/:id/funding", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             const projectId = req.params.id;
             try {
                 const funding = await projectsManager.getProjectFunding(projectId);
@@ -815,6 +821,10 @@ class ProjectsRouter {
                     contributor: { type: "string", maxLength: 100 },
                     contribution: { type: "string" },
                 },
+                oneOfRequired: [
+                    ["who", "contributor"],
+                    ["what", "contribution"],
+                ],
             },
         }), async (req, res) => {
             const projectId = req.params.id;
@@ -882,7 +892,9 @@ class ProjectsRouter {
          * @param {string} id - The ID of the project.
          * Retrieves the project's updates.
          */
-        router.get("/:id/updates", async (req, res) => {
+        router.get("/:id/updates", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             const projectId = req.params.id;
             try {
                 if (!await projectsManager.findProjectById(projectId)) {
@@ -903,7 +915,12 @@ class ProjectsRouter {
          * @param {string} updateId - The ID of the project update to retrieve.
          * Retrieves a project update.
          */
-        router.get("/:id/updates/:updateId", async (req, res) => {
+        router.get("/:id/updates/:updateId", validateRequest({
+            params: {
+                id: { type: "identifier" },
+                updateId: { type: "identifier" },
+            },
+        }), async (req, res) => {
             const { id: projectId, updateId } = req.params;
             try {
                 if (!await projectsManager.findProjectById(projectId)) {
