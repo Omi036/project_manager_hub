@@ -133,7 +133,7 @@ class UsersRouter {
          */
         router.get("/all", async (req, res) => {
             try {
-                const users = await usersManager.getUsers()                
+                const users = (await usersManager.getUsers())
                     .map(user => ({
                         username: user.username,
                         nick: user.nick,

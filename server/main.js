@@ -1,25 +1,61 @@
+//// IMPORTS
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-
-require('dotenv').config({ quiet: true });
-
-// Loads the database connection pool and the API routers
-const pool = require("./database");
+const { rateLimit } = require('express-rate-limit');
 const { createAuthMiddleware, createAuthRouter } = require("./auth");
+
+const path = require('path');
+const pool = require("./database");
 
 const { ProjectsManager } = require("./managers/projects");
 const { UsersManager } = require("./managers/users");
 const { DiscussionsManager } = require("./managers/discussions");
 const { NewsManager } = require("./managers/news");
 
+require('dotenv').config({ quiet: true });
 
+
+
+//// RATE LIMITING
+// Validates that an environment variable is a positive integer, or returns a fallback value.
+function positiveIntegerEnv(name, fallback) {
+    const value = process.env[name];
+    if (value === undefined) return fallback;
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+        throw new Error(`${name} must be a positive integer`);
+    }
+    return parsed;
+}
+
+const rateLimitWindowMs = positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000);
+const apiRateLimitMax = positiveIntegerEnv("API_RATE_LIMIT_MAX", 100);
+const authRateLimitMax = positiveIntegerEnv("AUTH_RATE_LIMIT_MAX", 10);
+
+// Creates the rate limit 
+const apiLimiter = rateLimit({
+    windowMs: rateLimitWindowMs,
+    limit: apiRateLimitMax,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+});
+const authLimiter = rateLimit({
+    windowMs: rateLimitWindowMs,
+    limit: authRateLimitMax,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+});
+
+
+
+///// API
 const app = express();
 
 app.use(cors({origin: process.env.CLIENT_ORIGIN || false, credentials: true,}));
 app.use(express.json({ limit: "1mb" }));
-app.use("/auth", createAuthRouter(pool));
-app.use("/api", createAuthMiddleware(pool, {
+app.use("/auth", authLimiter, createAuthRouter(pool));
+app.use("/api", apiLimiter, createAuthMiddleware(pool, {
     publicGetAllRoutes: [
         "/projects/all",
         "/users/all",
