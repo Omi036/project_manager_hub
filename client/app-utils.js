@@ -4,11 +4,23 @@
 const $ = (selector) => document.querySelector(selector);
 
 // Escapa caracteres especiales en HTML para prevenir inyecciones.
-const esc = (text) =>
-    String(text).replace(
-        /[&<>"]/g,
-        (character) =>({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character],
-    );
+// Lista de caracteres a escapar
+const entities = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+    "`": "&#96;",
+};
+
+// Itera por cada caracter prohibido y lo escapa
+const esc = (input) =>
+    input == null
+        ? ""
+        : String(input).replace(/[&<>"'`]/g, (character) => entities[character]);
+
+
 
 // Obtiene la URL del avatar de un usuario, si existe y es válida.
 const avatarUrl = (user) => {
