@@ -44,11 +44,11 @@ main{max-width:1040px;margin:0 auto;padding:32px 24px 64px}
 .fund{list-style:none;margin:0;padding:0}
 .fund li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
 .fund li span:last-child{font-weight:700;text-align:right}
-.muted{color:var(--mute)}
+.muted{color:var(--mute);box-sizing:border-box;padding:0 10px}
 .md{max-width:70ch}.md h2{font-size:1.5rem;margin:1.2em 0 .4em}.md h3{font-size:1.2rem;margin:1.1em 0 .3em}.md h4{margin:1em 0 .3em}
 .md :first-child{margin-top:0}.md code{background:var(--soft);padding:1px 6px;border-radius:5px;font-size:.9em}
 .md blockquote{margin:1em 0;padding-left:14px;border-left:3px solid var(--accent);color:var(--mute)}
-.md a{color:var(--accent)}
+.md a{color:var(--accent)}.md .md-subtle{color:var(--mute);font-size:.85em}
 dialog{border:0;border-radius:20px;padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
 dialog::backdrop{background:rgba(10,14,22,.55)}
 form{display:flex;flex-direction:column;gap:18px;padding:24px}
@@ -117,7 +117,7 @@ select{width:100%;background:var(--bg);border:1px solid var(--line);border-radiu
 .conversation_messages{display:flex;flex-direction:column;gap:16px;max-height:55vh;overflow-y:auto;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:6px;margin:16px 0}
 .msg{display:flex;gap:12px}
 .mb{min-width:0}
-.mh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.mh{display:flex;gap:0px;align-items:baseline;flex-wrap:wrap}
 .mh .muted{font-size:.85rem}
 .mt{white-space:pre-wrap;overflow-wrap:anywhere}
 .avatar.sm{width:36px;height:36px;font-size:.8rem;flex:none}
@@ -128,7 +128,7 @@ select{width:100%;background:var(--bg);border:1px solid var(--line);border-radiu
 @media (max-width:760px){.brand{display:none}.search_bar{margin-left:0}.top{flex-wrap:wrap}}
 .mt{white-space:normal}
 .mt.md{max-width:none}
-.mt p{margin:.25em 0}
+.mt p{margin:0;line-height: 1.4}
 .op{background:var(--accent);color:#fff;font-size:.7rem;font-weight:600;padding:1px 7px;border-radius:4px}
 .men{background:var(--soft);color:var(--accent);border-radius:4px;padding:0 4px;text-decoration:none;font-weight:500}
 .message_form{position:relative}

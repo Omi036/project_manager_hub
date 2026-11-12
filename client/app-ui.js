@@ -668,4 +668,6 @@ window.addEventListener("hashchange", () => {
 
 // Renderiza la vista inicial de la aplicación al cargar la página
 refreshUI();
-API.restoreSession().then(refreshUI);
+Promise.all([API.restoreSession(), API.loadUsers(), API.loadDiscussions()])
+    .then(() => refreshUI())
+    .catch(() => refreshUI());

@@ -17,6 +17,17 @@ class User {
         this.created_at = created_at;
     }
 
+    toJSON() {
+        return {
+            username: this.username,
+            nick: this.nick,
+            role: this.role,
+            discord_id: this.discord_id,
+            avatar_url: this.avatar_url,
+            created_at: this.created_at,
+        };
+    }
+
     /**
      * Updates this user.
      * @param {Object} updatedData Fields to update.

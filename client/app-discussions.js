@@ -152,6 +152,14 @@ const initials = (name) =>
 
 // Genera el DOM del panel de discusiones, mostrando la lista de hilos y un botón para crear uno nuevo.
 function discPanel() {
+    if (API.discussionsLoading) {
+        return sideSection("Discusiones", 0, "", '<p class="muted">Cargando discusiones…</p>');
+    }
+
+    if (API.discussionError) {
+        return sideSection("Discusiones", 0, "", '<p class="muted" role="alert">No se pudieron cargar las discusiones.</p>');
+    }
+
     const rows = discussions
             .slice()
             .sort((first, second) => second.createdAt.localeCompare(first.createdAt))
@@ -167,7 +175,7 @@ function discPanel() {
     return sideSection(
         "Discusiones",
         discussions.length,
-        '<button class="btn pri" data-newdisc>+ Nueva</button>',
+        API.isAuthenticated ? '<button class="btn pri" data-newdisc>+ Nueva</button>' : "",
         rows,
     );
 }
@@ -175,9 +183,33 @@ function discPanel() {
 
 // Carga y renderiza la vista de discusión según el hash de la URL, mostrando el hilo seleccionado o la lista de discusiones.
 function renderChat(discussion) {
-    const msgs =discussion.messages
-        .map((message) => {
-            const user = resolveUser(message.author);
+    if (!discussion) {
+        app.innerHTML = '<div class="empty"><h2>Discusión no encontrada</h2><button class="btn" data-backhome>Volver al inicio</button></div>';
+        return;
+    }
+
+    const messageGroups = discussion.messages.reduce((groups, message) => {
+        const user = resolveUser(message.author);
+        const previousGroup = groups[groups.length - 1];
+        const previousMessage = previousGroup?.messages[previousGroup.messages.length - 1];
+        const elapsed = previousMessage && new Date(message.date) - new Date(previousMessage.date);
+
+        if (
+            previousGroup &&
+            previousGroup.user.username === user.username &&
+            Number.isFinite(elapsed) &&
+            elapsed >= 0 &&
+            elapsed <= 5 * 60 * 1000
+        ) {
+            previousGroup.messages.push(message);
+        } else {
+            groups.push({ user, messages: [message] });
+        }
+        return groups;
+    }, []);
+
+    const msgs = messageGroups
+        .map(({ user, messages }) => {
             return `
         <div class="msg">
             ${avatarMarkup(user, `sm${user.username === API.ME ? "" : " oth"}`)}
@@ -190,12 +222,13 @@ function renderChat(discussion) {
 
                     ${user.username === resolveUser(discussion.owner).username ? '<span class="op">OP</span>' : ""}
 
-                    <span class="muted">${fmtMsg(message.date)}</span>
+                    <span class="muted">${fmtMsg(messages[0].date)}</span>
                 </div>
 
-                <div class="mt md">
-                    ${parseMentions(MarkdownRenderer.render(message.text, true))}
-                </div>
+                ${messages.map((message) => `
+                    <div class="mt md message">
+                        ${parseMentions(MarkdownRenderer.render(message.text, true))}
+                    </div>`).join("")}
             </div>
         </div>`;
         })
@@ -206,7 +239,7 @@ function renderChat(discussion) {
     <div class="detail">
         <div class="dhead">
             <h1>${esc(discussion.title)}</h1>
-            ${API.canDelete(discussion) ? `<button class="btn del" data-deldisc="${discussion.id}">Eliminar hilo</button>` : ""}
+            ${API.isAuthenticated && API.canDelete(discussion) ? `<button class="btn del" data-deldisc="${discussion.id}">Eliminar hilo</button>` : ""}
             
             <button class="btn" data-backhome>Volver al inicio</button>
         </div>
@@ -217,12 +250,12 @@ function renderChat(discussion) {
             ${msgs}
         </div>
         
-        <form class="message_form" id="message_form">
+        ${API.isAuthenticated ? `<form class="message_form" id="message_form">
             <div class="mention_suggestions" id="mention_suggestions" hidden></div>
             
             <textarea id="message_text_input" rows="2" placeholder="Escribe en Markdown. Usa @usuario o #proyecto…" aria-label="Mensaje"></textarea>
             <button type="submit" class="btn pri">Enviar</button>
-        </form>
+        </form>` : '<p class="muted">Inicia sesión para participar en esta discusión.</p>'}
     </div>`;
 
 
@@ -232,8 +265,8 @@ function renderChat(discussion) {
 
 
 // Envía un mensaje en la discusión actual, si hay texto válido en el textarea.
-function sendMsg() {
-    const discussionMatch = location.hash.match(/^#discusion-(\w+)$/)
+async function sendMsg() {
+    const discussionMatch = location.hash.match(/^#discusion-([A-Za-z0-9_-]+)$/)
     const textarea = $("#message_text_input");
 
     if (!discussionMatch || !textarea) return;
@@ -241,9 +274,13 @@ function sendMsg() {
     const text = textarea.value.trim();
     if (!text) return;
 
-    API.sendMessage(discussionMatch[1], text);
-
-    renderChat(API.findDiscussion(discussionMatch[1]));
+    try {
+        await API.sendMessage(discussionMatch[1], text);
+        renderChat(API.findDiscussion(discussionMatch[1]));
+    } catch (error) {
+        console.error("No se pudo enviar el mensaje:", error);
+        alert("No se pudo enviar el mensaje. Inténtalo de nuevo.");
+    }
     $("#message_text_input").focus();
 }
 
@@ -283,9 +320,17 @@ dform.addEventListener("submit", (event) => {
     }
 
     // Crea la nueva discusión a través de la API, cierra el diálogo y navega al hilo recién creado.
-    const discussion = API.createDiscussion(title);
-    ddlg.close();
-    location.hash = "discusion-" + discussion.id;
+    API.createDiscussion(title)
+        .then((discussion) => {
+            ddlg.close();
+            location.hash = "discusion-" + discussion.id;
+        })
+        .catch((error) => {
+            console.error("No se pudo crear la discusión:", error);
+            $("#discussion_title_input").focus();
+            $("#discussion_title_input").setCustomValidity("No se pudo crear la discusión");
+            $("#discussion_title_input").reportValidity();
+        });
 });
 
 
@@ -316,8 +361,13 @@ document.addEventListener("click", (event) => {
     else if (clickedButton.dataset.deldisc) {
         // Busca la discusión correspondiente al botón presionado y solicita confirmación antes de eliminarla.
         const discussion = API.findDiscussion(clickedButton.dataset.deldisc);
-        if (confirm(`¿Eliminar el hilo “${discussion.title}”? Esta acción no se puede deshacer.`) && API.deleteDiscussion(discussion.id)) {
-            location.hash = "";
+        if (discussion && confirm(`¿Eliminar el hilo “${discussion.title}”? Esta acción no se puede deshacer.`)) {
+            API.deleteDiscussion(discussion.id)
+                .then((deleted) => { if (deleted) location.hash = ""; })
+                .catch((error) => {
+                    console.error("No se pudo eliminar la discusión:", error);
+                    alert("No se pudo eliminar la discusión. Inténtalo de nuevo.");
+                });
         }
 
     } 

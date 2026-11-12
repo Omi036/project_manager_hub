@@ -70,7 +70,7 @@ function renderPage() {
     }
 
     // Si el hash es "#discusion-<ID>", renderiza la vista de discusión.
-    const discussionMatch = location.hash.match(/^#discusion-(\w+)$/);
+    const discussionMatch = location.hash.match(/^#discusion-([A-Za-z0-9_-]+)$/);
     const currentDiscussion = discussionMatch && API.findDiscussion(discussionMatch[1]);
     if (currentDiscussion) {
         renderChat(currentDiscussion);

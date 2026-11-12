@@ -181,12 +181,15 @@ async function getDiscordUser(accessToken) {
 
 
 // Creates an Express middleware for handling session authentication
-function createAuthMiddleware(pool, { publicGetAllRoutes = [] } = {}) {
+function createAuthMiddleware(pool, { publicGetAllRoutes = [], publicGetPrefixes = [] } = {}) {
     const publicRoutes = new Set(publicGetAllRoutes);
 
     return async (request, response, next) => {
         // Skip the auth if a route is whitelisted
-        if (request.method === "GET" && publicRoutes.has(request.path)) {
+        if (
+            request.method === "GET" &&
+            (publicRoutes.has(request.path) || publicGetPrefixes.some((prefix) => request.path.startsWith(prefix)))
+        ) {
             return next();
         }
 

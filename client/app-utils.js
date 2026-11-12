@@ -146,6 +146,12 @@ class MarkdownRenderer {
                 const headingLevel = match[1].length + 1;
                 html += `<h${headingLevel}>${MarkdownRenderer.renderInline(match[2])}</h${headingLevel}>`;
 
+            // Texto secundario
+            } else if ((match = line.match(/^\s*-#\s+(.*)/))) {
+                flushParagraph();
+                closeList();
+                html += `<p class="md-subtle">${MarkdownRenderer.renderInline(match[1])}</p>`;
+
             // Listas desordenadas
             } else if ((match = line.match(/^\s*[-*]\s+(.*)/))) {
                 // Cierra los parrafos (si existen) antes de agregar las listas.

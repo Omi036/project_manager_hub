@@ -17,6 +17,16 @@ class DiscussionMessage {
         this.created_at = created_at;
     }
 
+    toJSON() {
+        return {
+            id: this.id,
+            discussion_id: this.discussion_id,
+            author: this.author,
+            text: this.text,
+            created_at: this.created_at,
+        };
+    }
+
     /**
      * Deletes this message.
      * @returns {Promise<boolean>} Whether the message was deleted.
@@ -36,6 +46,15 @@ class Discussion {
         this.title = title;
         this.owner = owner;
         this.created_at = created_at;
+    }
+
+    toJSON() {
+        return {
+            id: this.id,
+            title: this.title,
+            owner: this.owner,
+            created_at: this.created_at,
+        };
     }
 
     /** @returns {Promise<DiscussionMessage[]>} Messages in this discussion. */

@@ -59,31 +59,6 @@ function buildSampleNews() {
     ];
 }
 
-function buildSampleDiscussions() {
-    return [
-        {
-            id: "dmcdemo",
-            title: "¿Qué mods añadimos al servidor Create?",
-            owner: "Andrés",
-            createdAt: "2026-10-28T12:00:00.000Z",
-            messages: [
-                {
-                    id: "m1",
-                    author: "Andrés",
-                    date: "2026-10-28T12:01:00.000Z",
-                    text: "Propongo empezar con **Create** y sumar trenes más adelante. Detalles en #minecraft-servidor-create.",
-                },
-                {
-                    id: "m2",
-                    author: API.currentUser().nick,
-                    date: "2026-10-28T12:30:00.000Z",
-                    text: "Me parece bien. @andres_g, ¿te encargas de la whitelist?",
-                },
-            ],
-        },
-    ];
-}
-
 class API {
     static #me = "lucia_m";
     static #authenticated = false;
@@ -122,6 +97,8 @@ class API {
     static #projects = [];
     static #discussions = [];
     static #news = [];
+    static #discussionError = null;
+    static #discussionsLoading = false;
 
     // URL del API. Puede sobrescribirse con window.API_BASE_URL en despliegues separados.
     static #apiBaseUrl = (window.API_BASE_URL || window.location.origin).replace(/\/$/, "");
@@ -135,6 +112,21 @@ class API {
                 ...(options.headers || {}),
             },
         });
+    }
+
+    static async #requestJson(path, options = {}) {
+        const response = await API.#authRequest(path, {
+            ...options,
+            headers: {
+                "Content-Type": "application/json",
+                ...(options.headers || {}),
+            },
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+            throw new Error(payload?.error || `API request failed (${response.status})`);
+        }
+        return payload;
     }
 
     // Lee un valor del almacenamiento local y lo parsea como JSON.
@@ -166,7 +158,7 @@ class API {
     }
 
     static #timestamp() { return new Date().toISOString() }
-    static #legacySampleIds = ["p1demo", "p2demo", "d1demo", "n1demo"];
+    static #legacySampleIds = ["p1demo", "p2demo", "n1demo"];
 
     static #replaceLegacySamples(stored, buildSamples) {
         if (!Array.isArray(stored)) return buildSamples();
@@ -182,11 +174,10 @@ class API {
         // Lee los datos del almacenamiento local y reemplaza los proyectos, discusiones y noticias actuales.
         //! TODO: REEMPLAZAR CON LLAMADAS A UN SERVIDOR
         const storedProjects = API.#readStorage(API.#storageKeys.projects);
-        const storedDiscussions = API.#readStorage(API.#storageKeys.discussions);
         const storedNews = API.#readStorage(API.#storageKeys.news);
 
         API.#projects.splice(0, API.#projects.length, ...API.#replaceLegacySamples(storedProjects, buildSampleProjects));
-        API.#discussions.splice(0, API.#discussions.length, ...API.#replaceLegacySamples(storedDiscussions, buildSampleDiscussions));
+        API.#discussions.length = 0;
         API.#news.splice(0,API.#news.length, ...API.#replaceLegacySamples(storedNews, buildSampleNews));
 
         // Asegura que cada proyecto tenga los campos necesarios y valores por defecto.
@@ -197,12 +188,61 @@ class API {
             project.tags = project.tags || [];
         });
 
-        // Asegura que cada discusión tenga los campos necesarios y valores por defecto.
         return {
             projects: API.#projects,
             discussions: API.#discussions,
             news: API.#news,
         };
+    }
+
+    static get discussionError() { return API.#discussionError }
+    static get discussionsLoading() { return API.#discussionsLoading }
+
+    static async loadUsers() {
+        try {
+            const users = await API.#requestJson("/api/users/all");
+            if (Array.isArray(users)) API.USERS = users;
+        } catch (error) {
+            console.error("No se pudieron cargar los usuarios:", error);
+        }
+    }
+
+    static async loadDiscussions() {
+        API.#discussionsLoading = true;
+        API.#discussionError = null;
+
+        try {
+            const discussions = await API.#requestJson("/api/discussions/all");
+            if (!Array.isArray(discussions)) throw new Error("La API devolvió discusiones inválidas");
+
+            const hydrated = await Promise.all(discussions.map(async (discussion) => {
+                const messages = await API.#requestJson(`/api/discussions/${encodeURIComponent(discussion.id)}/messages`);
+                return {
+                    id: discussion.id,
+                    title: discussion.title,
+                    owner: discussion.owner,
+                    createdAt: discussion.created_at,
+                    messages: Array.isArray(messages)
+                        ? messages.map((message) => ({
+                            id: message.id,
+                            author: message.author,
+                            date: message.created_at,
+                            text: message.text,
+                        }))
+                        : [],
+                };
+            }));
+
+            API.#discussions.splice(0, API.#discussions.length, ...hydrated);
+            return API.#discussions;
+        } catch (error) {
+            API.#discussionError = error;
+            API.#discussions.length = 0;
+            console.error("No se pudieron cargar las discusiones:", error);
+            throw error;
+        } finally {
+            API.#discussionsLoading = false;
+        }
     }
 
     // Restaura la sesión existente del servidor.
@@ -466,48 +506,47 @@ class API {
     }
 
     // Crea una discusión nueva y la agrega a la lista de discusiones.
-    static createDiscussion(title) {
-        const discussion = {
-            id: uid(),
-            title,
-            owner: API.ME,
-            createdAt: API.#timestamp(),
+    static async createDiscussion(title) {
+        const discussion = await API.#requestJson("/api/discussions/create", {
+            method: "POST",
+            body: JSON.stringify({ title }),
+        });
+        const normalized = {
+            id: discussion.id,
+            title: discussion.title,
+            owner: discussion.owner,
+            createdAt: discussion.created_at,
             messages: [],
         };
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.#discussions.push(discussion);
-        API.#persist();
-        return discussion;
+        API.#discussions.unshift(normalized);
+        return normalized;
     }
 
 
     // Elimina una discusión existente si el usuario tiene permisos de administrador o es el propietario.
-    static deleteDiscussion(discussionId) {
+    static async deleteDiscussion(discussionId) {
         // Encuentra la discusión por su ID y verifica si el usuario tiene permisos para eliminarla.
         const discussion = API.findDiscussion(discussionId);
-        if (!API.canDelete(discussion)) return false;
-
-        // Elimina la discusión de la lista y persiste los cambios.
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
+        if (!discussion || !API.canDelete(discussion)) return false;
+        await API.#requestJson(`/api/discussions/${encodeURIComponent(discussionId)}/delete`, { method: "DELETE" });
         API.#discussions.splice(API.#discussions.indexOf(discussion), 1);
-        API.#persist();
         return true;
     }
 
 
     // Envía un mensaje a una discusión existente.
-    static sendMessage(discussionId, text) {
-        const message = {
-            id: uid(),
-            author: API.ME,
-            date: API.#timestamp(),
-            text,
+    static async sendMessage(discussionId, text) {
+        const message = await API.#requestJson(`/api/discussions/${encodeURIComponent(discussionId)}/messages`, {
+            method: "POST",
+            body: JSON.stringify({ text }),
+        });
+        const normalized = {
+            id: message.id,
+            author: message.author,
+            date: message.created_at,
+            text: message.text,
         };
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.findDiscussion(discussionId).messages.push(message);
-        API.#persist();
-        return message;
+        API.findDiscussion(discussionId)?.messages.push(normalized);
+        return normalized;
     }
 }
