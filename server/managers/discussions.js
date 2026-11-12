@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const express = require("express");
+const { validateJsonBody, validateRequest } = require("../validation");
 
 class DiscussionMessage {
     /**
@@ -242,7 +243,9 @@ class DiscussionsRouter {
          * @body {Object} discussionData - The data for the new discussion.
          * Creates a discussion owned by the authenticated user.
          */
-        router.post("/create", async (req, res) => {
+        router.post("/create", validateJsonBody({
+            title: { type: "string", required: true, maxLength: 200 },
+        }), async (req, res) => {
             try {
                 res.status(201).json(await discussionsManager.createDiscussion({
                     ...req.body,
@@ -261,7 +264,18 @@ class DiscussionsRouter {
          * @body {Object} updatedData - The fields to update.
          * Updates a discussion. Only its owner or an admin can perform this action.
          */
-        router.put("/:id/update", async (req, res) => {
+        router.put("/:id/update", validateRequest({
+            params: { id: { type: "identifier" } },
+            body: {
+                required: true,
+                nonEmpty: true,
+                fields: {
+                    title: { type: "string", maxLength: 200 },
+                    owner: { type: "string", maxLength: 50 },
+                    owner_username: { type: "string", maxLength: 50 },
+                },
+            },
+        }), async (req, res) => {
             try {
                 const discussion = await discussionsManager.findDiscussionById(req.params.id);
                 if(req.user.username !== discussion?.owner && req.user.role !== "admin") {
@@ -283,7 +297,9 @@ class DiscussionsRouter {
          * @param {string} id - The ID of the discussion to delete.
          * Deletes a discussion. Only its owner or an admin can perform this action.
          */
-        router.delete("/:id/delete", async (req, res) => {
+        router.delete("/:id/delete", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             try {
                 const discussion = await discussionsManager.findDiscussionById(req.params.id);
                 if(req.user.username !== discussion?.owner && req.user.role !== "admin") {
@@ -325,7 +341,13 @@ class DiscussionsRouter {
          * @body {Object} messageData - The data for the new message.
          * Creates a message in a discussion.
          */
-        router.post("/:id/messages", async (req, res) => {
+        router.post("/:id/messages", validateRequest({
+            params: { id: { type: "identifier" } },
+            body: {
+                required: true,
+                fields: { text: { type: "string", required: true } },
+            },
+        }), async (req, res) => {
             try {
                 if (!await discussionsManager.findDiscussionById(req.params.id)) {
                     return res.status(404).json({ error: "Discussion not found" });
@@ -348,7 +370,12 @@ class DiscussionsRouter {
          * @param {string} messageId - The ID of the message to delete.
          * Deletes a message. Only its author or an admin can perform this action.
          */
-        router.delete("/:id/messages/:messageId", async (req, res) => {
+        router.delete("/:id/messages/:messageId", validateRequest({
+            params: {
+                id: { type: "identifier" },
+                messageId: { type: "identifier" },
+            },
+        }), async (req, res) => {
             try {
                 const message = await discussionsManager.getMessageById(req.params.messageId);
                 if (!message) {

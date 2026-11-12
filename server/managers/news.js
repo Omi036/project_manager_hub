@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const express = require("express");
+const { validateJsonBody, validateRequest } = require("../validation");
 
 class News {
     /**
@@ -164,7 +165,12 @@ class NewsRouter {
          * @body {Object} newsData - The data for the new news item.
          * Creates a news item. Only admins can perform this action.
          */
-        router.post("/create", async (req, res) => {
+        router.post("/create", validateJsonBody({
+            title: { type: "string", required: true, maxLength: 200 },
+            description: { type: "string", maxLength: 65535 },
+            desc: { type: "string", maxLength: 65535 },
+            banner: { type: "string", maxLength: 65535 },
+        }), async (req, res) => {
             try {
                 if(req.user.role !== "admin") {
                     return res.status(403).json({ error: "Forbidden: Only admins can create news items." });
@@ -187,7 +193,21 @@ class NewsRouter {
          * @body {Object} updatedData - The fields to update.
          * Updates a news item. Only admins can perform this action.
          */
-        router.put("/:id/update", async (req, res) => {
+        router.put("/:id/update", validateRequest({
+            params: { id: { type: "identifier" } },
+            body: {
+                required: true,
+                nonEmpty: true,
+                fields: {
+                    title: { type: "string", maxLength: 200 },
+                    description: { type: "string", maxLength: 65535 },
+                    desc: { type: "string", maxLength: 65535 },
+                    banner: { type: "string", maxLength: 65535 },
+                    created_by: { type: "string", maxLength: 50 },
+                    createdBy: { type: "string", maxLength: 50 },
+                },
+            },
+        }), async (req, res) => {
             try {
                 if(req.user.role !== "admin") {
                     return res.status(403).json({ error: "Forbidden: Only admins can update news items." });
@@ -208,7 +228,9 @@ class NewsRouter {
          * @param {string} id - The ID of the news item to delete.
          * Deletes a news item. Only admins can perform this action.
          */
-        router.delete("/:id/delete", async (req, res) => {
+        router.delete("/:id/delete", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             try {
                 if(req.user.role !== "admin") {
                     return res.status(403).json({ error: "Forbidden: Only admins can delete news items." });

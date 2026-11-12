@@ -1,4 +1,5 @@
 const express = require("express");
+const { validateJsonBody, validateRequest } = require("../validation");
 
 class User {
     /**
@@ -178,7 +179,13 @@ class UsersRouter {
          * @body {Object} userData - The data for the new user (username, nick, role, discord_id, avatar_url).
          * Creates a new user. Only admins can perform this action.
          */
-        router.post("/create", async (req, res) => {
+        router.post("/create", validateJsonBody({
+            username: { type: "string", required: true, maxLength: 50 },
+            nick: { type: "string", required: true, maxLength: 100 },
+            role: { type: "string", enum: ["member", "admin"] },
+            discord_id: { type: "string", nullable: true, maxLength: 100 },
+            avatar_url: { type: "string", nullable: true, maxLength: 255 },
+        }), async (req, res) => {
             try {
                 // Only allow admins to create users
                 // (Note that account creation via Discord is handled by the Auth Router)
@@ -201,7 +208,19 @@ class UsersRouter {
          * @body {Object} updatedData - The fields to update (nick, role, discord_id, avatar_url).
          * Updates a user's information. Only the user themselves or an admin can perform this action.
          */
-        router.put("/:username/update", async (req, res) => {
+        router.put("/:username/update", validateRequest({
+            params: { username: { type: "string", required: true, maxLength: 50 } },
+            body: {
+                required: true,
+                nonEmpty: true,
+                fields: {
+                    nick: { type: "string", maxLength: 100 },
+                    role: { type: "string", enum: ["member", "admin"] },
+                    discord_id: { type: "string", nullable: true, maxLength: 100 },
+                    avatar_url: { type: "string", nullable: true, maxLength: 255 },
+                },
+            },
+        }), async (req, res) => {
             try {
                 // Only allow the user themselves or an admin to update the user
                 if(req.user.username !== req.params.username && req.user.role !== "admin") {

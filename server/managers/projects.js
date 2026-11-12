@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const express = require("express");
+const { validateJsonBody, validateRequest } = require("../validation");
 
 class Project {
     /**
@@ -646,7 +647,19 @@ class ProjectsRouter {
          * @body {Object} projectData - The data for the new project.
          * Creates a project owned by the authenticated user.
          */
-        router.post("/create", async (req, res) => {
+        router.post("/create", validateJsonBody({
+            title: { type: "string", required: true, maxLength: 200 },
+            description: { type: "string", maxLength: 65535 },
+            desc: { type: "string", maxLength: 65535 },
+            icon: { type: "string", maxLength: 100 },
+            icon_color: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
+            iconColor: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
+            status: { type: "string", enum: ["Ideado", "En progreso", "Finalizado", "Abortado"] },
+            tags: { types: ["string", "array"] },
+            collabs: { type: "array" },
+            collaborators: { type: "array" },
+            funding: { type: "array" },
+        }, { oneOfRequired: [["description", "desc"]] }), async (req, res) => {
             try {
                 const newProject = await projectsManager.createProject({
                     ...req.body,
@@ -684,7 +697,26 @@ class ProjectsRouter {
          * @body {Object} collaborator - The collaborator to add.
          * Adds a collaborator. Only the project owner or an admin can perform this action.
          */
-        router.post("/:id/collaborators", async (req, res) => {
+        router.post("/:id/collaborators", validateRequest({
+            params: { id: { type: "identifier" } },
+            custom: (request) => {
+                if (typeof request.body === "string") {
+                    return request.body.trim() ? null : "Collaborator name is required";
+                }
+                if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
+                    return "Request body must be a collaborator name or object";
+                }
+                if (typeof request.body.name !== "string" || !request.body.name.trim()) {
+                    return "Collaborator name is required";
+                }
+                if (request.body.name.length > 100) return "Collaborator name is too long";
+                if (request.body.username !== undefined && request.body.username !== null
+                    && (typeof request.body.username !== "string" || request.body.username.length > 50)) {
+                    return "Collaborator username is invalid";
+                }
+                return null;
+            },
+        }), async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username
             
@@ -713,7 +745,16 @@ class ProjectsRouter {
          * @body {Object} collaborator - The collaborator to remove.
          * Removes a collaborator. Only the project owner or an admin can perform this action.
          */
-        router.delete("/:id/collaborators", async (req, res) => {
+        router.delete("/:id/collaborators", validateRequest({
+            params: { id: { type: "identifier" } },
+            query: { name: { type: "string", maxLength: 100 } },
+            custom: (request) => {
+                const name = request.body?.name ?? request.body?.collaborator_name ?? request.query.name;
+                return typeof name === "string" && name.trim()
+                    ? null
+                    : "Collaborator name is required";
+            },
+        }), async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username
 
@@ -764,7 +805,18 @@ class ProjectsRouter {
          * @body {Object} funding - The funding entry to add.
          * Adds a funding entry. Only project members or an admin can perform this action.
          */
-        router.post("/:id/funding", async (req, res) => {
+        router.post("/:id/funding", validateRequest({
+            params: { id: { type: "identifier" } },
+            body: {
+                required: true,
+                fields: {
+                    who: { type: "string", maxLength: 100 },
+                    what: { type: "string" },
+                    contributor: { type: "string", maxLength: 100 },
+                    contribution: { type: "string" },
+                },
+            },
+        }), async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username;
 
@@ -794,7 +846,12 @@ class ProjectsRouter {
          * @param {number|string} fundingId - The ID of the funding entry to remove.
          * Removes a funding entry. Only project members or an admin can perform this action.
          */
-        router.delete("/:id/funding/:fundingId", async (req, res) => {
+        router.delete("/:id/funding/:fundingId", validateRequest({
+            params: {
+                id: { type: "identifier" },
+                fundingId: { type: "integer" },
+            },
+        }), async (req, res) => {
             const { id: projectId, fundingId } = req.params;
             const reqUsername = req.user.username;
 
@@ -868,7 +925,18 @@ class ProjectsRouter {
          * @body {Object} updateData - The data for the new project update.
          * Creates a project update. Only project members or an admin can perform this action.
          */
-        router.post("/:id/updates", async (req, res) => {
+        router.post("/:id/updates", validateRequest({
+            params: { id: { type: "identifier" } },
+            body: {
+                required: true,
+                fields: {
+                    title: { type: "string", required: true, maxLength: 200 },
+                    description: { type: "string", maxLength: 65535 },
+                    desc: { type: "string", maxLength: 65535 },
+                },
+                oneOfRequired: [["description", "desc"]],
+            },
+        }), async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username;
 
@@ -898,7 +966,21 @@ class ProjectsRouter {
          * @body {Object} updatedData - The fields to update.
          * Updates a project update. Only project members or an admin can perform this action.
          */
-        router.put("/:id/updates/:updateId", async (req, res) => {
+        router.put("/:id/updates/:updateId", validateRequest({
+            params: {
+                id: { type: "identifier" },
+                updateId: { type: "identifier" },
+            },
+            body: {
+                required: true,
+                nonEmpty: true,
+                fields: {
+                    title: { type: "string", maxLength: 200 },
+                    description: { type: "string", maxLength: 65535 },
+                    desc: { type: "string", maxLength: 65535 },
+                },
+            },
+        }), async (req, res) => {
             const { id: projectId, updateId } = req.params;
             const reqUsername = req.user.username;
 
@@ -931,7 +1013,12 @@ class ProjectsRouter {
          * @param {string} updateId - The ID of the project update to delete.
          * Deletes a project update. Only project members or an admin can perform this action.
          */
-        router.delete("/:id/updates/:updateId", async (req, res) => {
+        router.delete("/:id/updates/:updateId", validateRequest({
+            params: {
+                id: { type: "identifier" },
+                updateId: { type: "identifier" },
+            },
+        }), async (req, res) => {
             const { id: projectId, updateId } = req.params;
             const reqUsername = req.user.username
 
@@ -965,7 +1052,32 @@ class ProjectsRouter {
          * @body {Object} updatedData - The fields and relations to update.
          * Updates a project. Only the project owner or an admin can perform this action.
          */
-        router.put("/:id/update", async (req, res) => {
+        router.put("/:id/update", validateRequest({
+            params: { id: { type: "identifier" } },
+            body: {
+                required: true,
+                nonEmpty: true,
+                fields: {
+                    title: { type: "string", maxLength: 200 },
+                    icon: { type: "string", maxLength: 100 },
+                    icon_color: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
+                    iconColor: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
+                    status: { type: "string", enum: ["Ideado", "En progreso", "Finalizado", "Abortado"] },
+                    description: { type: "string", maxLength: 65535 },
+                    desc: { type: "string", maxLength: 65535 },
+                    tags: { types: ["string", "array"] },
+                    owner_name: { type: "string", maxLength: 100 },
+                    owner: { type: "string", maxLength: 100 },
+                    owner_username: { type: "string", maxLength: 50 },
+                    ownerUsername: { type: "string", maxLength: 50 },
+                    created_by: { type: "string", maxLength: 50 },
+                    createdBy: { type: "string", maxLength: 50 },
+                    collabs: { type: "array" },
+                    collaborators: { type: "array" },
+                    funding: { type: "array" },
+                },
+            },
+        }), async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username;
             
@@ -998,7 +1110,9 @@ class ProjectsRouter {
          * @param {string} id - The ID of the project to delete.
          * Deletes a project. Only the project owner or an admin can perform this action.
          */
-        router.delete("/:id/delete", async (req, res) => {
+        router.delete("/:id/delete", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
             const projectId = req.params.id;
             const reqUsername = req.user.username
             try {

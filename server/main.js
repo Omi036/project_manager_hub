@@ -84,6 +84,9 @@ app.use((error, request, response, next) => {
     console.error(error);
 
     if (response.headersSent) return next(error);
+    if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
+        return response.status(400).json({ error: "Invalid request", details: ["Malformed JSON body"] });
+    }
     response.status(500).json({ error: "Internal server error" });
 });
 
