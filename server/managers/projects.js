@@ -170,8 +170,8 @@ class ProjectsManager {
     async createProject(projectData) {
         const id = projectData.id || randomUUID();
         const title = this._requiredField(projectData.title, "title");
-        const description = this._requiredField(projectData.description ?? projectData.desc, "description");
-        const ownerName = this._requiredField(projectData.owner_name ?? projectData.owner, "owner_name");
+        const description = this._requiredField(projectData.description, "description");
+        const ownerName = this._requiredField(projectData.owner_name, "owner_name");
         const connection = await this.db.getConnection();
 
         try {
@@ -188,13 +188,13 @@ class ProjectsManager {
                 id,
                 title,
                 projectData.icon ?? null,
-                projectData.icon_color ?? projectData.iconColor ?? null,
+                projectData.icon_color ?? projectData.icon_color ?? null,
                 projectData.status ?? null,
                 description,
                 this._serializeTags(projectData.tags),
                 ownerName,
                 projectData.owner_username ?? null,
-                projectData.created_by ?? projectData.createdBy ?? null,
+                projectData.created_by ?? null,
             ]);
 
             await this._replaceProjectRelations(id, projectData, connection);
@@ -237,13 +237,13 @@ class ProjectsManager {
         const fields = {
             title: updatedData.title,
             icon: updatedData.icon,
-            icon_color: updatedData.icon_color ?? updatedData.iconColor,
+            icon_color: updatedData.icon_color ?? updatedData.icon_color,
             status: updatedData.status,
-            description: updatedData.description ?? updatedData.desc,
+            description: updatedData.description,
             tags: updatedData.tags === undefined ? undefined : this._serializeTags(updatedData.tags),
-            owner_name: updatedData.owner_name ?? updatedData.owner,
-            owner_username: updatedData.owner_username ?? updatedData.ownerUsername,
-            created_by: updatedData.created_by ?? updatedData.createdBy,
+            owner_name: updatedData.owner_name,
+            owner_username: updatedData.owner_username,
+            created_by: updatedData.created_by
         };
 
         const columnNames = {
@@ -462,7 +462,7 @@ class ProjectsManager {
         const id = updateData.id || randomUUID();
         const title = this._requiredField(updateData.title, "title");
         const description = this._requiredField(
-            updateData.description ?? updateData.desc,
+            updateData.description,
             "description",
         );
 
@@ -482,7 +482,7 @@ class ProjectsManager {
     async updateProjectUpdate(updateId, updatedData) {
         const fields = Object.entries({
             title: updatedData.title,
-            description: updatedData.description ?? updatedData.desc,
+            description: updatedData.description,
         }).filter(([, value]) => value !== undefined);
 
         if (!fields.length) return this.findProjectUpdateById(updateId);
@@ -678,16 +678,14 @@ class ProjectsRouter {
         router.post("/create", validateJsonBody({
             title: { type: "string", required: true, maxLength: 200 },
             description: { type: "string", maxLength: 65535 },
-            desc: { type: "string", maxLength: 65535 },
             icon: { type: "string", maxLength: 100 },
             icon_color: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
-            iconColor: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
             status: { type: "string", enum: ["Ideado", "En progreso", "Finalizado", "Abortado"] },
             tags: { types: ["string", "array"] },
             collabs: { type: "array" },
             collaborators: { type: "array" },
             funding: { type: "array" },
-        }, { oneOfRequired: [["description", "desc"]] }), async (req, res) => {
+        }, { oneOfRequired: [["description"]] }), async (req, res) => {
             try {
                 const newProject = await projectsManager.createProject({
                     ...req.body,
@@ -975,9 +973,8 @@ class ProjectsRouter {
                 fields: {
                     title: { type: "string", required: true, maxLength: 200 },
                     description: { type: "string", maxLength: 65535 },
-                    desc: { type: "string", maxLength: 65535 },
                 },
-                oneOfRequired: [["description", "desc"]],
+                oneOfRequired: [["description"]],
             },
         }), async (req, res) => {
             const projectId = req.params.id;
@@ -1019,8 +1016,7 @@ class ProjectsRouter {
                 nonEmpty: true,
                 fields: {
                     title: { type: "string", maxLength: 200 },
-                    description: { type: "string", maxLength: 65535 },
-                    desc: { type: "string", maxLength: 65535 },
+                    description: { type: "string", maxLength: 65535 }
                 },
             },
         }), async (req, res) => {
@@ -1104,17 +1100,12 @@ class ProjectsRouter {
                     title: { type: "string", maxLength: 200 },
                     icon: { type: "string", maxLength: 100 },
                     icon_color: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
-                    iconColor: { type: "string", maxLength: 7, pattern: /^#[0-9A-Fa-f]{6}$/ },
                     status: { type: "string", enum: ["Ideado", "En progreso", "Finalizado", "Abortado"] },
                     description: { type: "string", maxLength: 65535 },
-                    desc: { type: "string", maxLength: 65535 },
                     tags: { types: ["string", "array"] },
                     owner_name: { type: "string", maxLength: 100 },
-                    owner: { type: "string", maxLength: 100 },
                     owner_username: { type: "string", maxLength: 50 },
-                    ownerUsername: { type: "string", maxLength: 50 },
                     created_by: { type: "string", maxLength: 50 },
-                    createdBy: { type: "string", maxLength: 50 },
                     collabs: { type: "array" },
                     collaborators: { type: "array" },
                     funding: { type: "array" },

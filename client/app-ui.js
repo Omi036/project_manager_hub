@@ -330,11 +330,11 @@ function heroHtml() {
             </div>
             
             <div class="hero-body">
-                <span class="eyebrow">Última noticia · ${fmtDay(latest.createdAt)}</span>
+                <span class="eyebrow">Última noticia · ${fmtDay(latest.created_at)}</span>
                 <h2>${esc(latest.title)}</h2>
                 
                 <div class="md clamp">
-                    ${MarkdownRenderer.render(latest.desc)}
+                    ${MarkdownRenderer.render(latest.description)}
                 </div>
 
                 <button class="btn pri" data-gonews>Leer más ${tablerSvg("arrow-right", 16)}</button>
@@ -378,7 +378,7 @@ function iconMarkup(project, size) {
 
 // Genera el HTML para un cuadro de icono de proyecto, incluyendo un color de fondo y un icono.
 function iconBox(project) {
-    const color = safeColor(project.iconColor);
+    const color = safeColor(project.icon_color);
     const tint = isTablerIcon(project.icon) || !project.icon
             ? `style="color:${color};background:color-mix(in srgb,${color} 14%,var(--surface))"`
             : ``;
@@ -414,9 +414,7 @@ function refreshBell() {
     const bellDot = document.querySelector("#news_notifications_button .dot");
     if (bellDot)
         bellDot.hidden = !news.some(
-            (item) =>
-                Date.now() - new Date(item.createdAt).getTime() <
-                14 * 24 * 60 * 60 * 1000,
+            (item) => isRecent(item.created_at),
         );
 }
 
@@ -426,12 +424,6 @@ $("#news_notifications_button").onclick = () => {location.hash = "noticias"};
 
 // Genera el HTML para la sección de estadísticas, incluyendo proyectos en progreso, noticias recientes y discusiones recientes.
 function statsHtml() {
-    const isRecent = (isoDate) =>
-        Date.now() - new Date(isoDate).getTime() < 14 * 24 * 60 * 60 * 1000;
-
-    const newestFirst = (first, second) =>
-        second.createdAt.localeCompare(first.createdAt);
-
     const row = (attribute, targetId, title, isoDate) => `
         <button class="mini-row" ${attribute}="${targetId}">    
             <b>${esc(title)}</b>
@@ -440,12 +432,12 @@ function statsHtml() {
 
     const inProgress = projects
         .filter((project) => project.status === "En progreso")
-        .sort(newestFirst);
+        .sort(newestFirstBy("created_at"));
 
-    const recentNews = sortedNews().filter((item) => isRecent(item.createdAt));
+    const recentNews = sortedNews().filter((item) => isRecent(item.created_at));
     const recentDiscussions = discussions
-        .filter((discussion) => isRecent(discussion.createdAt))
-        .sort(newestFirst);
+        .filter((discussion) => isRecent(discussion.created_at))
+        .sort(newestFirstBy("created_at"));
 
     const card = (title, iconName, tone, items, toRow) => `
         <section class="stat-card">
@@ -465,13 +457,13 @@ function statsHtml() {
     return `
         <div class="stats">
             ${card("Proyectos en progreso", "loader", "blue", inProgress, 
-                (project) => row("data-open", project.id, project.title, project.createdAt))}
+                (project) => row("data-open", project.id, project.title, project.created_at))}
                 
             ${card("Noticias recientes", "news", "green", recentNews, 
-                (item) => row("data-gonews", "", item.title, item.createdAt))}
+                (item) => row("data-gonews", "", item.title, item.created_at))}
                 
             ${card("Discusiones recientes", "messages", "purple", recentDiscussions, 
-                (discussion) => row("data-opendisc", discussion.id, discussion.title, discussion.createdAt))}
+                (discussion) => row("data-opendisc", discussion.id, discussion.title, discussion.created_at))}
                 
         </div>`;
 }
@@ -497,7 +489,7 @@ const tagsHtml = (tags) =>
 const sortedNews = () =>
     news
         .slice()
-        .sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+        .sort(newestFirstBy("created_at"));
 
 
 // Genera el HTML para la sección de noticias en el panel laaterl, mostrando las noticias más recientes y un botón para ver todas las noticias.
@@ -509,12 +501,11 @@ function newsPanel() {
     if (!others.length) return "";
 
     // Genera las filas de las noticias
-    const rows =
-        others
+    const rows = others
             .map((item) =>
                 `<button class="drow" data-gonews>
                     <b>${esc(item.title)}</b>
-                    <small>${fmtDay(item.createdAt)}</small>
+                    <small>${fmtDay(item.created_at)}</small>
                 </button>`,
             ).join("") || '<p class="muted">Aún no hay noticias.</p>';
 
@@ -534,7 +525,7 @@ function renderNews() {
                     <div class="uhd">
                         <h3>${esc(item.title)}</h3>
                         
-                        <span class="muted">${fmtDate(item.createdAt)}</span>
+                        <span class="muted">${fmtDate(item.created_at)}</span>
                         
                         ${canManage ? `
                         <div class="actw">
@@ -549,7 +540,7 @@ function renderNews() {
                     </div>
                     
                     <div class="md">
-                        ${MarkdownRenderer.render(item.desc)}
+                        ${MarkdownRenderer.render(item.description)}
                     </div>
                 </article>`,
             ).join("") || '<p class="muted">Aún no hay noticias.</p>';
@@ -592,7 +583,7 @@ function openNews(newsId) {
         </label>
         
         <label>Descripción (Markdown)
-            <textarea id="news_description_input">${esc(item ? item.desc : "")}</textarea>
+            <textarea id="news_description_input">${esc(item ? item.description : "")}</textarea>
         </label>
         
         <div class="actions">

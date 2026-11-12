@@ -71,9 +71,9 @@ class NewsManager {
         `, [
             id,
             newsData.title,
-            newsData.description ?? newsData.desc,
+            newsData.description,
             newsData.banner,
-            newsData.created_by ?? newsData.createdBy,
+            newsData.created_by,
         ]);
         return this.findNewsById(id);
     }
@@ -101,9 +101,9 @@ class NewsManager {
     async updateNews(newsId, updatedData) {
         const fields = Object.entries({
             title: updatedData.title,
-            description: updatedData.description ?? updatedData.desc,
+            description: updatedData.description,
             banner: updatedData.banner,
-            created_by: updatedData.created_by ?? updatedData.createdBy,
+            created_by: updatedData.created_by,
         }).filter(([, value]) => value !== undefined);
 
         if (!fields.length) return this.findNewsById(newsId);
@@ -181,7 +181,6 @@ class NewsRouter {
         router.post("/create", validateJsonBody({
             title: { type: "string", required: true, maxLength: 200 },
             description: { type: "string", maxLength: 65535 },
-            desc: { type: "string", maxLength: 65535 },
             banner: { type: "string", maxLength: 65535 },
         }), async (req, res) => {
             try {
@@ -214,10 +213,8 @@ class NewsRouter {
                 fields: {
                     title: { type: "string", maxLength: 200 },
                     description: { type: "string", maxLength: 65535 },
-                    desc: { type: "string", maxLength: 65535 },
                     banner: { type: "string", maxLength: 65535 },
-                    created_by: { type: "string", maxLength: 50 },
-                    createdBy: { type: "string", maxLength: 50 },
+                    created_by: { type: "string", maxLength: 50 }
                 },
             },
         }), async (req, res) => {

@@ -94,7 +94,7 @@ function renderProjects() {
     
     // Filtra la lista de proyectos según la vista seleccionada (propios, colaboraciones o todos)
     if (view === "own") {
-        projectsList = projects.filter((project) => same(project.owner, API.currentUser().nick));
+        projectsList = projects.filter((project) => same(project.owner_name, API.currentUser().nick));
 
     } else if (view === "col") {
         projectsList = projects.filter((project) => project.collabs.some((collaboratorName) => same(collaboratorName, API.currentUser().nick)));
@@ -103,11 +103,12 @@ function renderProjects() {
     
 
     // Selecciona el título según la vista actual
-    const title = {
+    const titles = {
         own: "Mis proyectos",
         col: "Mis colaboraciones",
-        all: "Todos los proyectos",
-    }[view];
+        all:  "Todos los proyectos",
+    }
+    const title = titles[view];
 
 
     // Si no hay proyectos muestra un mensaje indicando que no hay proyectos y un botón para crear uno nuevo.
@@ -125,7 +126,7 @@ function renderProjects() {
     app.innerHTML = `
         <section class="panel">
             <div class="panel-head">
-                <div class="panel-title">
+            <div class="panel-title">
                     <h2>${title}</h2>
                     <span>${projectsList.length}</span>
                 </div>
@@ -139,12 +140,12 @@ function renderProjects() {
 
                     <span class="tt">
                         <b>${esc(project.title)}</b>
-                        <small>Propietario: ${esc(project.owner || "—")}</small>
+                        <small>Propietario: ${esc(project.owner_name || "—")}</small>
                     </span>
 
                     ${badge(project.status)}
 
-                    <span class="dt">${fmtDay(project.createdAt)}</span>
+                    <span class="dt">${fmtDay(project.created_at)}</span>
                 </button>`).join("") +`
             </div>
         </section>
@@ -159,12 +160,12 @@ function renderDetail(project) {
     // Renderiza los updates del proyecto, ordenados por fecha descendente.
     const updatesDom = (project.updates || [])
         .slice()
-        .sort((first, second) => second.date.localeCompare(first.date))
+        .sort(newestFirstBy("created_at"))
         .map((projectUpdate) =>`
             <article class="upd">
                 <div class="uhd">
                     <h3>${esc(projectUpdate.title)}</h3>
-                    <span class="muted">${fmtDate(projectUpdate.date)}</span>
+                    <span class="muted">${fmtDate(projectUpdate.created_at)}</span>
 
                     <div class="actw">
                         <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones del update">⋯</button>
@@ -176,7 +177,7 @@ function renderDetail(project) {
                 </div>
 
                 <div class="md">
-                    ${MarkdownRenderer.render(projectUpdate.desc)}
+                    ${MarkdownRenderer.render(projectUpdate.description)}
                 </div>
 
             </article>`,
@@ -217,7 +218,7 @@ function renderDetail(project) {
 
         <div class="cols">
             <div class="md">
-                ${project.desc.trim() ? MarkdownRenderer.render(project.desc) : '<p class="muted">Sin descripción.</p>'}
+                ${project.description.trim() ? MarkdownRenderer.render(project.description) : '<p class="muted">Sin descripción.</p>'}
             </div>
 
             <aside class="side">
@@ -228,12 +229,12 @@ function renderDetail(project) {
 
                 <section>
                     <h3>Fecha de creación</h3>
-                    <b>${fmtDate(project.createdAt)}</b>
+                    <b>${fmtDate(project.created_at)}</b>
                 </section>
                 
                 <section>
                     <h3>Propietario</h3>
-                    <b>${esc(project.owner || "—")}</b>
+                    <b>${esc(project.owner_name) || "—"}</b>
                 </section>
                 
                 <section class="${project.tags && project.tags.length ? "" : "side-section--empty"}">
@@ -277,13 +278,13 @@ function openForm(project) {
             id: uid(),
             title: "",
             icon: "tabler:rocket",
-            iconColor: "#2d4ca3",
-            desc: "",
-            owner: API.currentUser().nick,
+            icon_color: "#2d4ca3",
+            description: "",
+            owner_name: API.currentUser().nick,
             collabs: [],
             funding: [],
             status: "Ideado",
-            createdAt: new Date().toISOString(),
+            created_at: new Date().toISOString(),
         };
 
 
@@ -304,7 +305,7 @@ function openForm(project) {
     <div class="lbl">Icono
         <div class="emojis" id="project_icon_picker"></div>
         <label class="colorrow">Color del icono
-            <input type="color" id="project_icon_color_input" value="${safeColor(projectDraft.iconColor)}">
+            <input type="color" id="project_icon_color_input" value="${safeColor(projectDraft.icon_color)}">
         </label>
     </div>
 
@@ -317,12 +318,12 @@ function openForm(project) {
             </span>
         </div>
 
-        <textarea id="project_description_input" placeholder="# Título&#10;Usa **negrita**, *cursiva*, listas, enlaces…">${esc(projectDraft.desc)}</textarea>
+        <textarea id="project_description_input" placeholder="# Título&#10;Usa **negrita**, *cursiva*, listas, enlaces…">${esc(projectDraft.description)}</textarea>
         <div class="preview md" id="project_description_preview" hidden></div>
     </div>
 
     <label>Propietario
-        <input type="text" id="project_owner_input" value="${esc(projectDraft.owner)}">
+        <input type="text" id="project_owner_input" value="${esc(projectDraft.owner_name)}">
     </label>
 
     <label>Etiquetas (separadas por comas)
@@ -550,9 +551,9 @@ form.addEventListener("submit", async (event) => {
     const fields = {
         title,
         icon: projectDraft.icon || "tabler:rocket",
-        iconColor: safeColor(projectDraft.iconColor),
-        desc: $("#project_description_input").value,
-        owner: $("#project_owner_input").value.trim(),
+        icon_color: safeColor(projectDraft.icon_color),
+        description: $("#project_description_input").value,
+        owner_name: $("#project_owner_input").value.trim(),
         collabs: projectDraft.collabs,
         funding: projectDraft.funding.filter((fundingEntry) => fundingEntry.who.trim() || fundingEntry.what.trim()),
         status: $("#project_status_select").value,
@@ -600,7 +601,7 @@ function openUp(projectId, updateId) {
     </label>
 
     <label>Descripción (Markdown)
-        <textarea id="update_description_input">${esc(projectUpdate ? projectUpdate.desc : "")}</textarea>
+        <textarea id="update_description_input">${esc(projectUpdate ? projectUpdate.description : "")}</textarea>
     </label>
     
     <div class="actions">

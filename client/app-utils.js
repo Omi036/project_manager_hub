@@ -39,6 +39,17 @@ const userInitials = (name) =>
         .join("")
         .toUpperCase();
 
+// Convierte un nombre de usuario o nick en un objeto de usuario válido.
+const resolveUser = (rawUser) => {
+    const key = (rawUser || "").trim().toLowerCase();
+    return (
+        API.USERS.find((user) => user.username === key || user.nick.toLowerCase() === key) || {
+            username: key.replace(/\s+/g, "_") || "anon",
+            nick: rawUser || "Anónimo",
+        }
+    );
+};
+
 
 // Genera el marcado HTML para un avatar de usuario
 const avatarMarkup = (user, className = "") => {
@@ -84,6 +95,10 @@ const fmtGeneral = (isoDate, options = { dateStyle: "long", timeStyle: "short" }
 const fmtDay = (isoDate) => {return fmtGeneral(isoDate, { dateStyle: "medium" })}
 const fmtMsg = (isoDate) => {return fmtGeneral(isoDate, { dateStyle: "short", timeStyle: "short" })}
 const fmtDate = (isoDate) => {return fmtGeneral(isoDate, { dateStyle: "long", timeStyle: "short" })}
+const newestFirstBy = (field) => (first, second) =>
+    second[field].localeCompare(first[field]);
+const isRecent = (isoDate, days = 14) =>
+    Date.now() - new Date(isoDate).getTime() < days * 24 * 60 * 60 * 1000;
 
 
 
@@ -109,7 +124,7 @@ class MarkdownRenderer {
     }
 
     // Renderiza texto multilinea con párrafos, encabezados, listas y citas.
-    static render(src, keepLineBreaks = false) {
+    static render(src) {
         const lines = (src || "").split("\n");
         let html = "";
         let list = null;

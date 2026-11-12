@@ -2,15 +2,9 @@
 // Persistencia y modelo de datos. Se carga antes de las vistas que usan la API.
 
 class API {
-    static #me = "lucia_m";
+    static #me = "unlogged";
     static #authenticated = false;
-    static #users = [
-        { username: "lucia_m", nick: "Lucía Márquez" },
-        { username: "andres_g", nick: "Andrés", role: "admin" },
-        { username: "marta_r", nick: "Marta" },
-        { username: "sofia_l", nick: "Sofía" },
-        { username: "pablo_ruiz", nick: "Pablo Ruiz" },
-    ];
+    static #users = [];
 
     // Almacena los usuarios en memoria (suponemos que la aplicación no tiene muchos usuarios)
     static get ME() { return API.#me }
@@ -20,8 +14,19 @@ class API {
     static set USERS(users) { API.#users = users }
 
     static get isAuthenticated() { return API.#authenticated }
-
-
+    
+    static #settingsStorageKey = "gestor-ajustes-v1"
+    
+    static #projects = [];
+    static #discussions = [];
+    static #news = [];
+    static #discussionError = null;
+    static #projectsError = null;
+    static #discussionsLoading = false;
+    
+    static #apiBaseUrl = (window.API_BASE_URL || window.location.origin).replace(/\/$/, "");
+    
+    // Devuelve el objeto completo del usuario (o el username y nick si no se encuentra)
     static currentUser() {
         return API.USERS.find((user) => user.username === API.ME) || {
             username: API.ME,
@@ -29,21 +34,7 @@ class API {
         };
     }
 
-    static #storageKeys = {
-        discussions: "gestor-discusiones-v1",
-        settings: "gestor-ajustes-v1",
-    };
-
-    static #projects = [];
-    static #discussions = [];
-    static #news = [];
-    static #discussionError = null;
-    static #projectsError = null;
-    static #discussionsLoading = false;
-
-    // URL del API. Puede sobrescribirse con window.API_BASE_URL en despliegues separados.
-    static #apiBaseUrl = (window.API_BASE_URL || window.location.origin).replace(/\/$/, "");
-
+    // Realiza una petición HTTP autenticada al servidor, incluyendo cookies de sesión.
     static #authRequest(path, options = {}) {
         return fetch(`${API.#apiBaseUrl}${path}`, {
             credentials: "include",
@@ -55,6 +46,7 @@ class API {
         });
     }
 
+    // Realiza una petición HTTP autenticada al servidor y devuelve la respuesta parseada como JSON.
     static async #requestJson(path, options = {}) {
         const response = await API.#authRequest(path, {
             ...options,
@@ -80,6 +72,7 @@ class API {
         }
     }
 
+    // Devuelve un objeto con los datos cargados de la API (proyectos, discusiones y noticias).
     static loadData() {
         API.#projects.length = 0;
         API.#discussions.length = 0;
@@ -94,24 +87,35 @@ class API {
 
     static get projectsError() { return API.#projectsError }
 
+    // Normaliza un proyecto para que tenga todos los campos esperados, incluyendo valores por defecto y relaciones.
     static #normalizeProject(project, relations = {}) {
         return {
             id: project.id,
             title: project.title,
             icon: project.icon || "tabler:rocket",
-            iconColor: project.icon_color ?? project.iconColor ?? "#2d4ca3",
+            icon_color: project.icon_color ?? "#2d4ca3",
             status: project.status || STATUS[0],
-            desc: project.description ?? project.desc ?? "",
-            owner: project.owner_name ?? project.owner ?? "",
-            ownerUsername: project.owner_username ?? project.ownerUsername ?? null,
-            createdAt: project.created_at ?? project.createdAt,
-            createdBy: project.created_by ?? project.createdBy,
+            description: project.description ?? "",
+            owner_name: project.owner_name ?? "",
+            owner_username: project.owner_username ?? null,
+            created_at: project.created_at,
+            created_by: project.created_by,
             tags: Array.isArray(project.tags)
                 ? project.tags
                 : String(project.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean),
             collabs: relations.collabs ?? project.collabs ?? [],
             funding: relations.funding ?? project.funding ?? [],
             updates: relations.updates ?? project.updates ?? [],
+        };
+    }
+
+    // Normaliza una update para que tenga los campos esperados
+    static #normalizeUpdate(update) {
+        return {
+            id: update.id,
+            title: update.title,
+            description: update.description ?? "",
+            created_at: update.created_at,
         };
     }
 
@@ -124,12 +128,7 @@ class API {
         return API.#normalizeProject(project, {
             collabs: collabs.map((collaborator) => collaborator.name ?? collaborator),
             funding,
-            updates: updates.map((update) => ({
-                id: update.id,
-                title: update.title,
-                desc: update.description ?? update.desc ?? "",
-                date: update.created_at ?? update.createdAt,
-            })),
+            updates: updates.map((update) => API.#normalizeUpdate(update)),
         });
     }
 
@@ -152,10 +151,10 @@ class API {
         return {
             id: item.id,
             title: item.title,
-            desc: item.description ?? item.desc ?? "",
+            description: item.description ?? "",
             banner: item.banner || "",
-            createdAt: item.created_at ?? item.createdAt,
-            createdBy: item.created_by ?? item.createdBy,
+            created_at: item.created_at,
+            created_by: item.created_by,
         };
     }
 
@@ -203,15 +202,8 @@ class API {
                     id: discussion.id,
                     title: discussion.title,
                     owner: discussion.owner,
-                    createdAt: discussion.created_at,
-                    messages: Array.isArray(messages)
-                        ? messages.map((message) => ({
-                            id: message.id,
-                            author: message.author,
-                            date: message.created_at,
-                            text: message.text,
-                        }))
-                        : [],
+                    created_at: discussion.created_at,
+                    messages: Array.isArray(messages) ? messages : []
                 };
             }));
 
@@ -256,11 +248,6 @@ class API {
         }
     }
 
-    // Mantiene la compatibilidad con las llamadas existentes y devuelve el usuario autenticado.
-    static async login() {
-        return API.restoreSession();
-    }
-
     // Devuelve los ajustes de la aplicación
     static getSettings() {
         return {
@@ -269,14 +256,14 @@ class API {
             showStats: true,
             showNews: true,
             // combinando los valores por defecto con los almacenados en localStorage.
-            ...API.#readStorage(API.#storageKeys.settings),
+            ...API.#readStorage(API.#settingsStorageKey),
         };
     }
 
     // Guarda los ajustes de la aplicación
     static saveSettings(settings) {
         try {
-            localStorage.setItem(API.#storageKeys.settings, JSON.stringify(settings));
+            localStorage.setItem(API.#settingsStorageKey, JSON.stringify(settings));
         } catch (error) {}
         return settings;
     }
@@ -318,7 +305,7 @@ class API {
     static canDelete(item, actorUsername = API.ME) {
         if (!item) return false;
 
-        const creatorUsername = item.createdBy || item.ownerUsername || resolveUser(item.owner).username;
+        const creatorUsername = item.created_by || item.owner_username || resolveUser(item.owner).username;
         return actorUsername === creatorUsername || API.isAdmin(actorUsername);
     }
 
@@ -377,7 +364,7 @@ class API {
     static async createProject(fields) {
         const project = await API.#requestJson("/api/projects/create", {
             method: "POST",
-            body: JSON.stringify({ ...fields, description: fields.desc }),
+            body: JSON.stringify({ ...fields, description: fields.description }),
         });
         const normalized = API.#normalizeProject(project, {
             collabs: fields.collabs || [],
@@ -392,7 +379,7 @@ class API {
     static async updateProject(projectId, changes) {
         const project = await API.#requestJson(`/api/projects/${encodeURIComponent(projectId)}/update`, {
             method: "PUT",
-            body: JSON.stringify({ ...changes, description: changes.desc }),
+            body: JSON.stringify({ ...changes, description: changes.description }),
         });
         const normalized = await API.#hydrateProject(project);
         const position = API.#projects.findIndex((entry) => entry.id === projectId);
@@ -421,12 +408,7 @@ class API {
             method: "POST",
             body: JSON.stringify({ title, description }),
         });
-        const projectUpdate = {
-            id: update.id,
-            title: update.title,
-            desc: update.description ?? update.desc ?? "",
-            date: update.created_at ?? update.createdAt,
-        };
+        const projectUpdate = API.#normalizeUpdate(update);
         API.findProject(projectId)?.updates.unshift(projectUpdate);
         return projectUpdate;
     }
@@ -437,12 +419,7 @@ class API {
             method: "PUT",
             body: JSON.stringify({ title, description }),
         });
-        const projectUpdate = {
-            id: update.id,
-            title: update.title,
-            desc: update.description ?? update.desc ?? "",
-            date: update.created_at ?? update.createdAt,
-        };
+        const projectUpdate = API.#normalizeUpdate(update);
         const project = API.findProject(projectId);
         const position = project?.updates.findIndex((entry) => entry.id === updateId) ?? -1;
         if (project && position >= 0) project.updates.splice(position, 1, projectUpdate);
@@ -478,7 +455,7 @@ class API {
             id: discussion.id,
             title: discussion.title,
             owner: discussion.owner,
-            createdAt: discussion.created_at,
+            created_at: discussion.created_at,
             messages: [],
         };
         API.#discussions.unshift(normalized);
@@ -503,13 +480,8 @@ class API {
             method: "POST",
             body: JSON.stringify({ text }),
         });
-        const normalized = {
-            id: message.id,
-            author: message.author,
-            date: message.created_at,
-            text: message.text,
-        };
-        API.findDiscussion(discussionId)?.messages.push(normalized);
-        return normalized;
+
+        API.findDiscussion(discussionId)?.messages.push(message);
+        return message;
     }
 }

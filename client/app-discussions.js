@@ -18,18 +18,6 @@ const loginDiscordButton = user_menu.querySelector("[data-login-discord]");
 const updateLoginButton = () => { loginDiscordButton.hidden = API.isAuthenticated};
 
 
-// Convierte un nombre de usuario o nick en un objeto de usuario válido.
-const resolveUser = (rawUser) => {
-    const key = (rawUser || "").trim().toLowerCase();
-    return (
-        API.USERS.find((user) => user.username === key || user.nick.toLowerCase() === key) || {
-            username: key.replace(/\s+/g, "_") || "anon",
-            nick: rawUser || "Anónimo",
-        }
-    );
-};
-
-
 // Convierte un texto en un slug válido para usar en URLs o identificadores.
 const slug = (text) => text
         .normalize("NFD")
@@ -139,17 +127,6 @@ document.addEventListener("input", (event) => {
 });
 
 
-// Devuelve las iniciales de un nombre o nick, útil para mostrar avatares de usuario.
-const initials = (name) =>
-    (name || "?")
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase();
-
-
 // Genera el DOM del panel de discusiones, mostrando la lista de hilos y un botón para crear uno nuevo.
 function discPanel() {
     if (API.discussionsLoading) {
@@ -162,11 +139,11 @@ function discPanel() {
 
     const rows = discussions
             .slice()
-            .sort((first, second) => second.createdAt.localeCompare(first.createdAt))
+            .sort(newestFirstBy("created_at"))
             .map((discussion) => `
                 <button class="drow" data-opendisc="${discussion.id}">
                     <b>${esc(discussion.title)}</b>
-                    <small>Por ${esc(resolveUser(discussion.owner).nick)}, ${fmtDay(discussion.createdAt)}</small>
+                    <small>Por ${esc(resolveUser(discussion.owner).nick)}, ${fmtDay(discussion.created_at)}</small>
                     <small class="replies">${tablerSvg("message", 14)} ${discussion.messages.length} ${discussion.messages.length === 1 ? "respuesta" : "respuestas"}</small>
                 </button>`,
             ).join("") || '<p class="muted">Aún no hay discusiones.</p>';
@@ -192,7 +169,7 @@ function renderChat(discussion) {
         const user = resolveUser(message.author);
         const previousGroup = groups[groups.length - 1];
         const previousMessage = previousGroup?.messages[previousGroup.messages.length - 1];
-        const elapsed = previousMessage && new Date(message.date) - new Date(previousMessage.date);
+        const elapsed = previousMessage && new Date(message.created_at) - new Date(previousMessage.created_at);
 
         if (
             previousGroup &&
@@ -222,12 +199,12 @@ function renderChat(discussion) {
 
                     ${user.username === resolveUser(discussion.owner).username ? '<span class="op">OP</span>' : ""}
 
-                    <span class="muted">${fmtMsg(messages[0].date)}</span>
+                    <span class="muted">${fmtMsg(messages[0].created_at)}</span>
                 </div>
 
                 ${messages.map((message) => `
                     <div class="mt md message">
-                        ${parseMentions(MarkdownRenderer.render(message.text, true))}
+                        ${parseMentions(MarkdownRenderer.render(message.text))}
                     </div>`).join("")}
             </div>
         </div>`;
@@ -244,7 +221,7 @@ function renderChat(discussion) {
             <button class="btn" data-backhome>Volver al inicio</button>
         </div>
         
-        <p class="muted" style="margin:0">Creada por <b>${esc(resolveUser(discussion.owner).nick)}</b> (@${esc(resolveUser(discussion.owner).username)}) el ${fmtDate(discussion.createdAt)}</p>
+        <p class="muted" style="margin:0">Creada por <b>${esc(resolveUser(discussion.owner).nick)}</b> (@${esc(resolveUser(discussion.owner).username)}) el ${fmtDate(discussion.created_at)}</p>
 
         <div class="conversation_messages" id="conversation_messages">
             ${msgs}
@@ -393,9 +370,9 @@ function filterProjects(query, loadedProjects) {
     return loadedProjects.filter((project) =>
             [
                 project.title,
-                project.owner,
+                project.owner_name,
                 project.status,
-                project.desc,
+                project.description,
                 ...(project.collabs || []),
                 ...(project.tags || []),
             ].join(" ")
@@ -425,7 +402,7 @@ function doSearch() {
         ? hits.map((project) =>`
             <button data-open="${project.id}">
                 <span class="inline-ico">${iconMarkup(project, 16)} ${esc(project.title)}</span>
-                <small>${esc(project.owner || "")}</small>
+                <small>${esc(project.owner_name || "")}</small>
             </button>`).join("")
 
         : '<p class="muted" style="margin:8px 12px">Sin resultados</p>';
