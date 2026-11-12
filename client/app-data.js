@@ -47,18 +47,6 @@ function buildSampleProjects() {
     ];
 }
 
-function buildSampleNews() {
-    return [
-        {
-            id: "nfestdemo",
-            title: "MorenoGameFest 2027 ya tiene fecha provisional",
-            createdAt: "2026-11-03T10:00:00.000Z",
-            createdBy: "andres_g",
-            desc: "Estamos cerrando la **primera edición** del evento. Si quieres colaborar, escríbenos.\n\n- Torneos y zona indie\n- Rincón retro",
-        },
-    ];
-}
-
 class API {
     static #me = "lucia_m";
     static #authenticated = false;
@@ -90,7 +78,6 @@ class API {
     static #storageKeys = {
         projects: "gestor-proyectos-v1",
         discussions: "gestor-discusiones-v1",
-        news: "gestor-noticias-v1",
         settings: "gestor-ajustes-v1",
     };
 
@@ -150,10 +137,6 @@ class API {
                 API.#storageKeys.discussions,
                 JSON.stringify(API.#discussions),
             );
-            localStorage.setItem(
-                API.#storageKeys.news,
-                JSON.stringify(API.#news),
-            );
         } catch (error) {}
     }
 
@@ -171,14 +154,12 @@ class API {
 
 
     static loadData() {
-        // Lee los datos del almacenamiento local y reemplaza los proyectos, discusiones y noticias actuales.
-        //! TODO: REEMPLAZAR CON LLAMADAS A UN SERVIDOR
+        // Lee los proyectos locales mientras las colecciones respaldadas por el servidor se cargan.
         const storedProjects = API.#readStorage(API.#storageKeys.projects);
-        const storedNews = API.#readStorage(API.#storageKeys.news);
 
         API.#projects.splice(0, API.#projects.length, ...API.#replaceLegacySamples(storedProjects, buildSampleProjects));
         API.#discussions.length = 0;
-        API.#news.splice(0,API.#news.length, ...API.#replaceLegacySamples(storedNews, buildSampleNews));
+        API.#news.length = 0;
 
         // Asegura que cada proyecto tenga los campos necesarios y valores por defecto.
         API.#projects.forEach((project) => {
@@ -193,6 +174,35 @@ class API {
             discussions: API.#discussions,
             news: API.#news,
         };
+    }
+
+    static #normalizeNews(item) {
+        return {
+            id: item.id,
+            title: item.title,
+            desc: item.description ?? item.desc ?? "",
+            banner: item.banner || "",
+            createdAt: item.created_at ?? item.createdAt,
+            createdBy: item.created_by ?? item.createdBy,
+        };
+    }
+
+    static async loadNews() {
+        try {
+            const response = await API.#requestJson("/api/news/all");
+            if (!Array.isArray(response)) throw new Error("La API devolvió noticias inválidas");
+
+            API.#news.splice(
+                0,
+                API.#news.length,
+                ...response.map((item) => API.#normalizeNews(item)),
+            );
+            return API.#news;
+        } catch (error) {
+            API.#news.length = 0;
+            console.error("No se pudieron cargar las noticias:", error);
+            throw error;
+        }
     }
 
     static get discussionError() { return API.#discussionError }
@@ -350,57 +360,35 @@ class API {
     }
 
     // Crea una noticia nueva y la agrega a la lista de noticias.
-    static createNews({ title, description, banner = "" }, actorUsername = API.ME) {
-        //! TODO: IMPLEMENTAR CREACIÓN DE NOTICIAS REAL CON SERVIDOR
-
-        if (!API.isAdmin(actorUsername)) return null;
-
-        // Crea un nuevo objeto de noticia con los campos proporcionados y valores por defecto.
-        const item = {
-            id: uid(),
-            title,
-            desc: description,
-            banner,
-            createdAt: API.#timestamp(),
-            createdBy: actorUsername,
-        };
-
-        // Agrega la noticia a la lista y persiste los cambios.
-        API.#news.push(item);
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.#persist();
-        return item;
+    static async createNews({ title, description, banner = "" }) {
+        const item = await API.#requestJson("/api/news/create", {
+            method: "POST",
+            body: JSON.stringify({ title, description, banner }),
+        });
+        const normalized = API.#normalizeNews(item);
+        API.#news.unshift(normalized);
+        return normalized;
     }
 
     // Actualiza una noticia existente con nuevos valores.
-    static updateNews(newsId, { title, description, banner = "" }, actorUsername = API.ME) {
-        //! TODO: IMPLEMENTAR ACTUALIZACIÓN DE NOTICIAS REAL CON SERVIDOR
-
-        // Encuentra la noticia por su ID y verifica si el usuario tiene permisos de administrador.
-        const item = API.findNews(newsId);
-        if (!item || !API.isAdmin(actorUsername)) return null;
-
-        // Actualiza los campos de la noticia con los nuevos valores.
-        Object.assign(item, { title, desc: description, banner });
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.#persist();
-        return item;
+    static async updateNews(newsId, { title, description, banner = "" }) {
+        const item = await API.#requestJson(`/api/news/${encodeURIComponent(newsId)}/update`, {
+            method: "PUT",
+            body: JSON.stringify({ title, description, banner }),
+        });
+        const normalized = API.#normalizeNews(item);
+        const position = API.#news.findIndex((entry) => entry.id === newsId);
+        if (position >= 0) API.#news.splice(position, 1, normalized);
+        return normalized;
     }
 
     // Elimina una noticia existente si el usuario tiene permisos de administrador.
-    static deleteNews(newsId, actorUsername = API.ME) {
-        //! TODO: IMPLEMENTAR ELIMINACIÓN DE NOTICIAS REAL CON SERVIDOR
-        // Encuentra la noticia por su ID y verifica si el usuario tiene permisos de administrador.
-        const item = API.findNews(newsId);
-        if (!item || !API.isAdmin(actorUsername)) return false;
-
-        // Elimina la noticia de la lista y persiste los cambios.
-        API.#news.splice(API.#news.indexOf(item), 1);
-
-        //! TODO: REEMPLAZAR CON LLAMADA A SERVIDOR
-        API.#persist();
+    static async deleteNews(newsId) {
+        await API.#requestJson(`/api/news/${encodeURIComponent(newsId)}/delete`, {
+            method: "DELETE",
+        });
+        const position = API.#news.findIndex((entry) => entry.id === newsId);
+        if (position >= 0) API.#news.splice(position, 1);
         return true;
     }
 

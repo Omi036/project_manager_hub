@@ -18,6 +18,17 @@ class News {
         this.created_at = created_at;
     }
 
+    toJSON() {
+        return {
+            id: this.id,
+            title: this.title,
+            description: this.description,
+            banner: this.banner,
+            created_by: this.created_by,
+            created_at: this.created_at,
+        };
+    }
+
     /**
      * Updates this news item.
      * @param {Object} updatedData Fields to update.

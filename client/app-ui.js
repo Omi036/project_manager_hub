@@ -607,7 +607,7 @@ function openNews(newsId) {
 
 
 // Escucha el evento de envío del formulario de noticias para crear o actualizar una noticia
-newsForm.addEventListener("submit", (event) => {
+newsForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const title = $("#news_title_input").value.trim();
 
@@ -626,12 +626,16 @@ newsForm.addEventListener("submit", (event) => {
     };
 
     // Si se está editando una noticia existente, actualiza la noticia; de lo contrario, crea una nueva noticia
-    if (editingNewsId) API.updateNews(editingNewsId, payload);
-    else API.createNews(payload);
+    try {
+        if (editingNewsId) await API.updateNews(editingNewsId, payload);
+        else await API.createNews(payload);
 
-    // Cierra el diálogo de noticias y vuelve a renderizar la lista de noticias
-    newsDialog.close();
-    render();
+        newsDialog.close();
+        render();
+    } catch (error) {
+        console.error("No se pudo guardar la noticia:", error);
+        alert("No se pudo guardar la noticia.");
+    }
 });
 
 
@@ -649,7 +653,14 @@ document.addEventListener("click", (event) => {
     // Boton de eliminar noticia específica
     else if (button.dataset.delnews) {
         const item = API.findNews(button.dataset.delnews);
-        if (confirm(`¿Eliminar la noticia “${item.title}”?`) &&API.deleteNews(item.id)) render();
+        if (item && confirm(`¿Eliminar la noticia “${item.title}”?`)) {
+            API.deleteNews(item.id)
+                .then(() => render())
+                .catch((error) => {
+                    console.error("No se pudo eliminar la noticia:", error);
+                    alert("No se pudo eliminar la noticia.");
+                });
+        }
 
     // Boton de cerrar el diálogo de noticias
     } else if (button.dataset.ncancel !== undefined) newsDialog.close();
@@ -668,6 +679,6 @@ window.addEventListener("hashchange", () => {
 
 // Renderiza la vista inicial de la aplicación al cargar la página
 refreshUI();
-Promise.all([API.restoreSession(), API.loadUsers(), API.loadDiscussions()])
+Promise.all([API.restoreSession(), API.loadUsers(), API.loadDiscussions(), API.loadNews()])
     .then(() => refreshUI())
     .catch(() => refreshUI());
