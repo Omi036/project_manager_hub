@@ -442,7 +442,7 @@ function statsHtml() {
     const card = (title, iconName, tone, items, toRow) => `
         <section class="stat-card">
             <div class="stat-head">
-                <span class="stat-ico tone-${tone}">${tablerSvg(iconName, 20)}</span>
+                <span class="stat-ico tone-${tone}">${tablerSvg(iconName, 30)}</span>
                 
                 <div class="stat-text">
                     <span class="stat-label">${title}</span>
