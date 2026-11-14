@@ -1,6 +1,8 @@
 const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateJsonBody, validateRequest } = require("../validation");
+const { DiscussionManager } = require("./discussions");
+const { FormManager } = require("./forms");
 
 class Project {
     /**
@@ -42,6 +44,8 @@ class Project {
 
     /** @returns {string[]} The project's tags. */
     getTags() { return this.tags }
+    /** @returns {Promise<Object[]>} The project's relations. */
+    getRelations() { return this.projectsManager.getProjectRelations(this.id) }
     /** @returns {Promise<Object[]>} The project's collaborators. */
     getCollaborators() { return this.projectsManager.getProjectCollaborators(this.id) }
     /** @returns {Promise<Object[]>} The project's funding entries. */
@@ -237,28 +241,16 @@ class ProjectsManager {
         const fields = {
             title: updatedData.title,
             icon: updatedData.icon,
-            icon_color: updatedData.icon_color ?? updatedData.icon_color,
+            icon_color: updatedData.icon_color, // Nota: Corregí el "updatedData.icon_color ?? updatedData.icon_color" que era redundante
             status: updatedData.status,
             description: updatedData.description,
-            tags: updatedData.tags === undefined ? undefined : this._serializeTags(updatedData.tags),
+            tags: updatedData.tags !== undefined ? this._serializeTags(updatedData.tags) : undefined,
             owner_name: updatedData.owner_name,
             owner_username: updatedData.owner_username,
             created_by: updatedData.created_by
         };
 
-        const columnNames = {
-            title: "title",
-            icon: "icon",
-            icon_color: "icon_color",
-            status: "status",
-            description: "description",
-            tags: "tags",
-            owner_name: "owner_name",
-            owner_username: "owner_username",
-            created_by: "created_by",
-        };
-        const updates = Object.entries(fields).filter(([, value]) => value !== undefined);
-
+        const updates = Object.entries(fields).filter(([_, value]) => value !== undefined);
         const project = await this.findProjectById(projectId);
         if (!project) return null;
 
@@ -331,6 +323,80 @@ class ProjectsManager {
             username: collaborator_username,
         }));
     }
+
+    /**
+     * Gets the relations for a project.
+     * @param {string} projectId Project ID whose relations should be returned.
+     * @returns {Promise<Object[]>} Project relations.
+     */
+    async getProjectRelations(projectId) {
+        const [rows] = await this.db.query(`
+            SELECT type, related_id
+            FROM project_relation
+            WHERE project_id = ?
+        `, [projectId]);
+
+        // Obtain every related object for the given relations
+        const parsedRelations = [];
+        for (const row of rows) {
+            // If relation is a discussion, fetch the discussion data
+            if (row.type === 'discussion') {
+                const discussionManager = new DiscussionManager(this.db);
+                const discussion = await discussionManager.findDiscussionById(row.related_id);
+
+                if (!discussion) {
+                    // Handle the case where the discussion is not found
+                    console.warn(`Discussion with ID ${row.related_id} not found for project ${projectId}`);
+                    continue; // Skip this relation if the discussion is not found
+                }
+
+                parsedRelations.push({
+                    type: row.type,
+                    comment: row.comment,
+                    related: discussion,
+                });
+
+            // If relation is a form, fetch the form data
+            } else if (row.type === 'form') {
+                const formManager = new FormManager(this.db);
+                const form = await formManager.findFormById(row.related_id);
+
+                if (!form) {
+                    // Handle the case where the form is not found
+                    console.warn(`Form with ID ${row.related_id} not found for project ${projectId}`);
+                    continue; // Skip this relation if the form is not found
+                }
+
+                parsedRelations.push({
+                    type: row.type,
+                    comment: row.comment,
+                    related: form,
+                });
+
+            } else if (row.type === 'contract') {
+                /*
+                const contractManager = new ContractManager(this.db);
+                const contract = await contractManager.findContractById(row.related_id);
+
+                if (!contract) {
+                    // Handle the case where the contract is not found
+                    console.warn(`Contract with ID ${row.related_id} not found for project ${projectId}`);
+                    continue; // Skip this relation if the contract is not found
+                }
+
+                parsedRelations.push({
+                    type: row.type,
+                    comment: row.comment,
+                    related: contract,
+                });
+                */
+            }
+
+        } 
+
+        return parsedRelations;
+    }
+
 
     /**
      * Gets the funding entries for a project.

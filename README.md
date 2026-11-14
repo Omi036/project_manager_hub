@@ -13,3 +13,12 @@ Human labor was used for structuring, polishing the interface and refactoring th
 5. Finally, run the entry point in the server directory (server/main.js): `node main.js`
 6. Open the website in your brower via the specified host and port in the `.env` file.
 
+
+## TODO:
+- Add forms
+- Add contracts
+- Add news comments
+- Add profiles
+- Add organizations
+- Add project, news and messages reactions
+- Relate threads nd forms to a project

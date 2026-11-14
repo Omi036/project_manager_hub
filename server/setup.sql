@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS project_relation (
+    project_id       VARCHAR(64) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    comment          TEXT,
+    type             VARCHAR(20) NOT NULL CHECK (type IN ('discussion', 'form', 'contract')),
+    related_id       VARCHAR(64) NOT NULL,
+    PRIMARY KEY (project_id, type, related_id)
+);
+
 CREATE TABLE IF NOT EXISTS project_collaborators (
     project_id       VARCHAR(64) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     collaborator_name VARCHAR(100) NOT NULL,
@@ -81,6 +89,52 @@ CREATE TABLE IF NOT EXISTS news (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS news_comments (
+    id         VARCHAR(64) PRIMARY KEY,
+    news_id    VARCHAR(64) NOT NULL REFERENCES news(id) ON DELETE CASCADE,
+    author     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
+    text       TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS forms (
+    id         VARCHAR(64) PRIMARY KEY,
+    title      VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    anonymous  BOOLEAN NOT NULL DEFAULT FALSE,
+    max_responses INT NOT NULL DEFAULT 1,
+    created_by  VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS forms_questions (
+    id         VARCHAR(64) PRIMARY KEY,
+    form_id    VARCHAR(64) NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    position   INT NOT NULL,
+    question   JSON NOT NULL,
+    type       VARCHAR(20) NOT NULL DEFAULT 'text'
+               CHECK (type IN ('short_text', 'long_text', 'multiple_choice', 'single_choice', 'rating_5', 'rating_10', 'checkbox', 'date', 'availability', 'number')),
+    options    JSON,
+    required   BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS forms_responses (
+    id         VARCHAR(64) PRIMARY KEY,
+    form_id    VARCHAR(64) NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    responder  VARCHAR(50) REFERENCES users(username) ON DELETE SET NULL,
+    response   JSON NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS contract {
+    id         VARCHAR(64) PRIMARY KEY,
+    title      VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    issuer     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
+    signer     VARCHAR(50) REFERENCES users(username) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+}
+
 CREATE INDEX idx_projects_created_at
     ON projects (created_at DESC);
 
@@ -95,6 +149,9 @@ CREATE INDEX idx_discussions_created_at
 
 CREATE INDEX idx_discussion_messages_discussion_created
     ON discussion_messages (discussion_id, created_at ASC);
+
+CREATE INDEX idx_forms_created_at
+    ON forms (created_at DESC);
 
 CREATE INDEX idx_news_created_at
     ON news (created_at DESC);
