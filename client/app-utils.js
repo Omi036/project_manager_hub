@@ -212,6 +212,14 @@ class MarkdownRenderer {
                     MarkdownRenderer.renderInline(match[1]) +
                     "</blockquote>";
 
+            // Separadores horizontales
+            } else if (line.trim().startsWith("---")) {
+                // Cierra los parrafos y listas (si existen) antes de agregar la línea horizontal.
+                flushParagraph();
+                closeList();
+
+                html += "<hr class='md-hr'>";
+
             // Lineas en blanco cierran cualquier lista y parrafo previo
             } else if (!line.trim()) {
                 flushParagraph();
