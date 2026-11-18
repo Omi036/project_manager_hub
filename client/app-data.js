@@ -35,7 +35,7 @@ class API {
     }
 
     // Realiza una petición HTTP autenticada al servidor, incluyendo cookies de sesión.
-    static #authRequest(path, options = {}) {
+    static #sendAuthedRequest(path, options = {}) {
         return fetch(`${API.#apiBaseUrl}${path}`, {
             credentials: "include",
             ...options,
@@ -48,7 +48,7 @@ class API {
 
     // Realiza una petición HTTP autenticada al servidor y devuelve la respuesta parseada como JSON.
     static async #requestJson(path, options = {}) {
-        const response = await API.#authRequest(path, {
+        const response = await API.#sendAuthedRequest(path, {
             ...options,
             headers: {
                 "Content-Type": "application/json",
@@ -94,7 +94,7 @@ class API {
             title: project.title,
             icon: project.icon || "tabler:rocket",
             icon_color: project.icon_color ?? "#2d4ca3",
-            status: project.status || STATUS[0],
+            status: project.status || PROJECT_STATUSES[0],
             description: project.description ?? "",
             owner_name: project.owner_name ?? "",
             owner_username: project.owner_username ?? null,
@@ -119,6 +119,7 @@ class API {
         };
     }
 
+    // Hidrata un proyecto con sus relaciones (colaboradores, financiación y actualizaciones) obtenidas de la API.
     static async #hydrateProject(project) {
         const [collabs, funding, updates] = await Promise.all([
             API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/collaborators`),
@@ -132,14 +133,17 @@ class API {
         });
     }
 
+    // Carga todos los proyectos desde la API y los almacena en memoria.
     static async loadProjects() {
         API.#projectsError = null;
         try {
             const response = await API.#requestJson("/api/projects/all");
             if (!Array.isArray(response)) throw new Error("La API devolvió proyectos inválidos");
+
             const hydrated = await Promise.all(response.map((project) => API.#hydrateProject(project)));
             API.#projects.splice(0, API.#projects.length, ...hydrated);
             return API.#projects;
+
         } catch (error) {
             API.#projectsError = error;
             console.error("No se pudieron cargar los proyectos:", error);
@@ -147,6 +151,7 @@ class API {
         }
     }
 
+    // Hidrata una noticia con sus datos y relaciones obtenidas de la API.
     static #normalizeNews(item) {
         return {
             id: item.id,
@@ -158,6 +163,7 @@ class API {
         };
     }
 
+    // Carga todas las noticias desde la API y las almacena en memoria.
     static async loadNews() {
         try {
             const response = await API.#requestJson("/api/news/all");
@@ -176,9 +182,7 @@ class API {
         }
     }
 
-    static get discussionError() { return API.#discussionError }
-    static get discussionsLoading() { return API.#discussionsLoading }
-
+    // Carga todos los usuarios desde la API y los almacena en memoria.
     static async loadUsers() {
         try {
             const users = await API.#requestJson("/api/users/all");
@@ -188,6 +192,10 @@ class API {
         }
     }
 
+    static get discussionError() { return API.#discussionError }
+    static get discussionsLoading() { return API.#discussionsLoading }
+
+    // Carga todas las discusiones desde la API y las almacena en memoria.
     static async loadDiscussions() {
         API.#discussionsLoading = true;
         API.#discussionError = null;
@@ -209,11 +217,13 @@ class API {
 
             API.#discussions.splice(0, API.#discussions.length, ...hydrated);
             return API.#discussions;
+
         } catch (error) {
             API.#discussionError = error;
             API.#discussions.length = 0;
             console.error("No se pudieron cargar las discusiones:", error);
             throw error;
+
         } finally {
             API.#discussionsLoading = false;
         }
@@ -223,7 +233,7 @@ class API {
     static async restoreSession() {
         try {
             // Intenta obtener la información del usuario autenticado desde el servidor.
-            const response = await API.#authRequest("/auth/me");
+            const response = await API.#sendAuthedRequest("/auth/me");
             if (!response.ok) {
                 API.#authenticated = false;
                 return null;
@@ -277,10 +287,8 @@ class API {
 
     // Cierra la sesión en el servidor.
     static async logout() {
-        alert("Cerrando sesión...");
-
         try {
-            const response = await API.#authRequest("/auth/logout", { method: "POST" });
+            const response = await API.#sendAuthedRequest("/auth/logout", { method: "POST" });
             if (!response.ok) throw new Error(`Logout failed (${response.status})`);
 
             API.ME = "lucia_m";
@@ -297,16 +305,16 @@ class API {
 
 
     // ==== MANAGEMENT ====
-    static isAdmin(username) {
+    static userIsAdmin(username) {
         return API.USERS.some((user) => user.username === username && user.role === "admin");
     }
 
     // Verifica si un usuario puede eliminar un elemento (proyecto, noticia o discusión) según su creador o rol de administrador.
-    static canDelete(item, actorUsername = API.ME) {
+    static userCanDeleteItem(item, actorUsername = API.ME) {
         if (!item) return false;
 
-        const creatorUsername = item.created_by || item.owner_username || resolveUser(item.owner).username;
-        return actorUsername === creatorUsername || API.isAdmin(actorUsername);
+        const creatorUsername = item.created_by || item.owner_username || getUserByName(item.owner).username;
+        return actorUsername === creatorUsername || API.userIsAdmin(actorUsername);
     }
 
 
@@ -467,7 +475,7 @@ class API {
     static async deleteDiscussion(discussionId) {
         // Encuentra la discusión por su ID y verifica si el usuario tiene permisos para eliminarla.
         const discussion = API.findDiscussion(discussionId);
-        if (!discussion || !API.canDelete(discussion)) return false;
+        if (!discussion || !API.userCanDeleteItem(discussion)) return false;
         await API.#requestJson(`/api/discussions/${encodeURIComponent(discussionId)}/delete`, { method: "DELETE" });
         API.#discussions.splice(API.#discussions.indexOf(discussion), 1);
         return true;

@@ -359,7 +359,7 @@ class ProjectsManager {
             // If relation is a form, fetch the form data
             } else if (row.type === 'form') {
                 const formManager = new FormManager(this.db);
-                const form = await formManager.findFormById(row.related_id);
+                const form = await formManager.getFormById(row.related_id);
 
                 if (!form) {
                     // Handle the case where the form is not found

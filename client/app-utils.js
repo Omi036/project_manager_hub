@@ -2,10 +2,11 @@
 
 // Selector DOM compartido por todos los módulos de la aplicación.
 const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 // Escapa caracteres especiales en HTML para prevenir inyecciones.
 // Lista de caracteres a escapar
-const entities = {
+const forbidden_chars = {
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
@@ -18,19 +19,19 @@ const entities = {
 const esc = (input) =>
     input == null
         ? ""
-        : String(input).replace(/[&<>"'`]/g, (character) => entities[character]);
+        : String(input).replace(/[&<>"'`]/g, (character) => forbidden_chars[character]);
 
 
 
 // Obtiene la URL del avatar de un usuario, si existe y es válida.
-const avatarUrl = (user) => {
+const getUserAvatarUrl = (user) => {
     const url = user?.avatar_url;
     return typeof url === "string" && url.startsWith("https://cdn.discordapp.com/") ? url : null;
 };
 
 
 // Genera las iniciales de un nombre de usuario
-const userInitials = (name) =>
+const parseInitials = (name) =>
     (name || "?")
         .split(/\s+/)
         .filter(Boolean)
@@ -40,7 +41,7 @@ const userInitials = (name) =>
         .toUpperCase();
 
 // Convierte un nombre de usuario o nick en un objeto de usuario válido.
-const resolveUser = (rawUser) => {
+const getUserByName = (rawUser) => {
     const key = (rawUser || "").trim().toLowerCase();
     return (
         API.USERS.find((user) => user.username === key || user.nick.toLowerCase() === key) || {
@@ -51,59 +52,49 @@ const resolveUser = (rawUser) => {
 };
 
 
-// Genera el marcado HTML para un avatar de usuario
-const avatarMarkup = (user, className = "") => {
-    const imageUrl = avatarUrl(user);
-    const content = imageUrl
-        ? `<img src="${esc(imageUrl)}" alt="" loading="lazy">`
-        : esc(userInitials(user?.nick));
-    return `<div class="avatar ${className}">${content}</div>`;
-};
-
-
 // Actualiza el DOM del avatar del usuario actual en la interfaz de usuario.
 const updateCurrentUserAvatar = () => {
-    const element = $("#current_user_avatar");
-    if (!element) return;
+    const avatarElement = $("#current_user_avatar");
+    if (!avatarElement) return;
 
     const user = API.currentUser();
-    const imageUrl = avatarUrl(user);
+    const imageUrl = getUserAvatarUrl(user);
 
-    element.innerHTML = imageUrl
+    avatarElement.innerHTML = imageUrl
         ? `<img src="${esc(imageUrl)}" alt="" loading="lazy">`
-        : esc(userInitials(user.nick));
+        : esc(parseInitials(user.nick));
 };
 
 // Genera un identificador único basado en la fecha y un número aleatorio.
 const uid = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
 // Estados de los proyectos, en orden de aparición.
-const STATUS = ["Ideado", "En progreso", "Finalizado", "Abortado"];
+const PROJECT_STATUSES = ["Ideado", "En progreso", "Finalizado", "Abortado"];
 
 // Compara dos cadenas de texto ignorando mayúsculas, minúsculas y espacios al inicio y al final.
-const same = (left, right) => (left || "").trim().toLowerCase() === right.toLowerCase();
+const areEqual = (left, right) => (left || "").trim().toLowerCase() === right.toLowerCase();
 
 // Formatea una fecha ISO a un formato legible en español, o devuelve la fecha original si hay un error.
-const fmtGeneral = (isoDate, options = { dateStyle: "long", timeStyle: "short" }) => {
-    try {
-        return new Date(isoDate).toLocaleString("es-ES", options);
-    } catch (error) {
-        return isoDate;
-    }
+const formatGeneralDate = (isoDate, options = { dateStyle: "long", timeStyle: "short" }) => {
+    try { return new Date(isoDate).toLocaleString("es-ES", options)}
+    catch (err) { return isoDate}
 }
 
-const fmtDay = (isoDate) => {return fmtGeneral(isoDate, { dateStyle: "medium" })}
-const fmtMsg = (isoDate) => {return fmtGeneral(isoDate, { dateStyle: "short", timeStyle: "short" })}
-const fmtDate = (isoDate) => {return fmtGeneral(isoDate, { dateStyle: "long", timeStyle: "short" })}
-const newestFirstBy = (field) => (first, second) =>
+const formatDay = (isoDate) => {return formatGeneralDate(isoDate, { dateStyle: "medium" })}
+const formatMessageDate = (isoDate) => {return formatGeneralDate(isoDate, { dateStyle: "short", timeStyle: "short" })}
+const formatDate = (isoDate) => {return formatGeneralDate(isoDate, { dateStyle: "long", timeStyle: "short" })}
+
+
+const getSorterByField = (field) => (first, second) =>
     second[field].localeCompare(first[field]);
-const isRecent = (isoDate, days = 14) =>
+
+const isDateRecent = (isoDate, days = 14) =>
     Date.now() - new Date(isoDate).getTime() < days * 24 * 60 * 60 * 1000;
 
 
 
-// Crea un badge con el estado del proyecto.
-const badge = (statusName) => `<span class="st st-${Math.max(0, STATUS.indexOf(statusName))}">${esc(statusName || STATUS[0])}</span>`;
+// Crea un getProjectBadgeDom con el estado del proyecto.
+const getProjectBadgeDom = (statusName) => `<span class="st st-${Math.max(0, PROJECT_STATUSES.indexOf(statusName))}">${esc(statusName || PROJECT_STATUSES[0])}</span>`;
 
 // Renderizador Markdown compartido por proyectos, noticias y discusiones.
 class MarkdownRenderer {

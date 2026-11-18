@@ -131,9 +131,16 @@ CREATE TABLE IF NOT EXISTS contract {
     title      VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     issuer     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
-    signer     VARCHAR(50) REFERENCES users(username) ON DELETE SET NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 }
+
+CREATE TABLE IF NOT EXISTS contract_signatures (
+    id          VARCHAR(64) PRIMARY KEY,
+    contract_id VARCHAR(64) NOT NULL REFERENCES contract(id) ON DELETE CASCADE,
+    signer      VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 
 CREATE INDEX idx_projects_created_at
     ON projects (created_at DESC);

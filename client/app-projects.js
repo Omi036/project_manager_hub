@@ -94,10 +94,10 @@ function renderProjects() {
     
     // Filtra la lista de proyectos según la vista seleccionada (propios, colaboraciones o todos)
     if (view === "own") {
-        projectsList = projects.filter((project) => same(project.owner_name, API.currentUser().nick));
+        projectsList = projects.filter((project) => areEqual(project.owner_name, API.currentUser().nick));
 
     } else if (view === "col") {
-        projectsList = projects.filter((project) => project.collabs.some((collaboratorName) => same(collaboratorName, API.currentUser().nick)));
+        projectsList = projects.filter((project) => project.collabs.some((collaboratorName) => areEqual(collaboratorName, API.currentUser().nick)));
 
     } 
     
@@ -143,9 +143,9 @@ function renderProjects() {
                         <small>Propietario: ${esc(project.owner_name || "—")}</small>
                     </span>
 
-                    ${badge(project.status)}
+                    ${getProjectBadgeDom(project.status)}
 
-                    <span class="dt">${fmtDay(project.created_at)}</span>
+                    <span class="dt">${formatDay(project.created_at)}</span>
                 </button>`).join("") +`
             </div>
         </section>
@@ -160,12 +160,12 @@ function renderDetail(project) {
     // Renderiza los updates del proyecto, ordenados por fecha descendente.
     const updatesDom = (project.updates || [])
         .slice()
-        .sort(newestFirstBy("created_at"))
+        .sort(getSorterByField("created_at"))
         .map((projectUpdate) =>`
             <article class="upd">
                 <div class="uhd">
                     <h3>${esc(projectUpdate.title)}</h3>
-                    <span class="muted">${fmtDate(projectUpdate.created_at)}</span>
+                    <span class="muted">${formatDate(projectUpdate.created_at)}</span>
 
                     <div class="actw">
                         <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones del update">⋯</button>
@@ -211,7 +211,7 @@ function renderDetail(project) {
                 <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones del proyecto">⋯</button>
                 <div class="acts">
                     <button class="btn" data-edit="${project.id}">Editar</button>
-                    ${API.canDelete(project) ? `<button class="btn del" data-del="${project.id}">Eliminar</button>` : ""}
+                    ${API.userCanDeleteItem(project) ? `<button class="btn del" data-del="${project.id}">Eliminar</button>` : ""}
                 </div>
             </div>
         </div>
@@ -224,12 +224,12 @@ function renderDetail(project) {
             <aside class="side">
                 <section>
                     <h3>Estado</h3>
-                    ${badge(project.status)}
+                    ${getProjectBadgeDom(project.status)}
                 </section>
 
                 <section>
                     <h3>Fecha de creación</h3>
-                    <b>${fmtDate(project.created_at)}</b>
+                    <b>${formatDate(project.created_at)}</b>
                 </section>
                 
                 <section>
@@ -297,7 +297,7 @@ function openForm(project) {
     <label>Título<input type="text" id="project_title_input" value="${esc(projectDraft.title)}" required></label>
 
     <label>Estado
-        <select id="project_status_select">${STATUS.map((statusName) => 
+        <select id="project_status_select">${PROJECT_STATUSES.map((statusName) => 
             `<option${statusName === projectDraft.status ? " selected" : ""}>${statusName}</option>`).join("")}
         </select>
     </label>

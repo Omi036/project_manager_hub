@@ -19,7 +19,7 @@ const updateLoginButton = () => { loginDiscordButton.hidden = API.isAuthenticate
 
 
 // Convierte un texto en un slug válido para usar en URLs o identificadores.
-const slug = (text) => text
+const sluify = (text) => text
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
@@ -53,7 +53,7 @@ function parseMentions(html) {
                         
                         // Mención de proyecto
                         if (sigil === "#") {
-                            const project = projects.find((entry) => slug(entry.title) === key);
+                            const project = projects.find((entry) => sluify(entry.title) === key);
                             return project
                                 ? `${prefix}<a class="men" href="#proyecto-${project.id}" title="${esc(project.title)}">#${key}</a>`
                                 : fullMatch;
@@ -68,7 +68,7 @@ let expanded = false;
 let renderedHash = null;
 
 
-function sugUpdate(textarea) {
+function updateSuggest(textarea) {
     // Actualiza las sugerencias de menciones según el texto actual en el textarea.
     const suggestionBox = $("#mention_suggestions")
     const mentionMatch = textarea.value
@@ -90,8 +90,8 @@ function sugUpdate(textarea) {
                         user.nick.toLowerCase().includes(query),
                     ).map((user) => ["@" + user.username, user.nick])
             : projects
-                .filter((project) => slug(project.title).includes(query))
-                .map((project) => ["#" + slug(project.title), (isTablerIcon(project.icon) ? "" : project.icon + " ") + project.title])
+                .filter((project) => sluify(project.title).includes(query))
+                .map((project) => ["#" + sluify(project.title), (isTablerIcon(project.icon) ? "" : project.icon + " ") + project.title])
     ).slice(0, 6);
 
 
@@ -123,7 +123,7 @@ function insertMention(mentionText) {
 
 // Escucha los eventos de entrada en el textarea para actualizar las sugerencias de menciones.
 document.addEventListener("input", (event) => {
-    if (event.target.id === "message_text_input") sugUpdate(event.target);
+    if (event.target.id === "message_text_input") updateSuggest(event.target);
 });
 
 
@@ -139,11 +139,11 @@ function discPanel() {
 
     const rows = discussions
             .slice()
-            .sort(newestFirstBy("created_at"))
+            .sort(getSorterByField("created_at"))
             .map((discussion) => `
                 <button class="drow" data-opendisc="${discussion.id}">
                     <b>${esc(discussion.title)}</b>
-                    <small>Por ${esc(resolveUser(discussion.owner).nick)}, ${fmtDay(discussion.created_at)}</small>
+                    <small>Por ${esc(getUserByName(discussion.owner).nick)}, ${formatDay(discussion.created_at)}</small>
                     <small class="replies">${tablerSvg("message", 14)} ${discussion.messages.length} ${discussion.messages.length === 1 ? "respuesta" : "respuestas"}</small>
                 </button>`,
             ).join("") || '<p class="muted">Aún no hay discusiones.</p>';
@@ -166,7 +166,7 @@ function renderChat(discussion) {
     }
 
     const messageGroups = discussion.messages.reduce((groups, message) => {
-        const user = resolveUser(message.author);
+        const user = getUserByName(message.author);
         const previousGroup = groups[groups.length - 1];
         const previousMessage = previousGroup?.messages[previousGroup.messages.length - 1];
         const elapsed = previousMessage && new Date(message.created_at) - new Date(previousMessage.created_at);
@@ -185,11 +185,21 @@ function renderChat(discussion) {
         return groups;
     }, []);
 
+
+
+    const getAvatarMarkup = (user) => {
+        const imageUrl = getUserAvatarUrl(user);
+        const content = imageUrl
+            ? `<img src="${esc(imageUrl)}" alt="" loading="lazy">`
+            : esc(parseInitials(user?.nick));
+        return `<div class="avatar sm${user.username === API.ME ? "" : " oth"}">${content}</div>`;
+    };
+
     const msgs = messageGroups
         .map(({ user, messages }) => {
             return `
         <div class="msg">
-            ${avatarMarkup(user, `sm${user.username === API.ME ? "" : " oth"}`)}
+            ${getAvatarMarkup(user)}
             <div class="mb">
 
                 <div class="mh">
@@ -197,9 +207,9 @@ function renderChat(discussion) {
                     <span class="muted">@${esc(user.username)}
                     </span>
 
-                    ${user.username === resolveUser(discussion.owner).username ? '<span class="op">OP</span>' : ""}
+                    ${user.username === getUserByName(discussion.owner).username ? '<span class="op">OP</span>' : ""}
 
-                    <span class="muted">${fmtMsg(messages[0].created_at)}</span>
+                    <span class="muted">${formatMessageDate(messages[0].created_at)}</span>
                 </div>
 
                 ${messages.map((message) => `
@@ -216,12 +226,12 @@ function renderChat(discussion) {
     <div class="detail">
         <div class="dhead">
             <h1>${esc(discussion.title)}</h1>
-            ${API.isAuthenticated && API.canDelete(discussion) ? `<button class="btn del" data-deldisc="${discussion.id}">Eliminar hilo</button>` : ""}
+            ${API.isAuthenticated && API.userCanDeleteItem(discussion) ? `<button class="btn del" data-deldisc="${discussion.id}">Eliminar hilo</button>` : ""}
             
             <button class="btn" data-backhome>Volver al inicio</button>
         </div>
         
-        <p class="muted" style="margin:0">Creada por <b>${esc(resolveUser(discussion.owner).nick)}</b> (@${esc(resolveUser(discussion.owner).username)}) el ${fmtDate(discussion.created_at)}</p>
+        <p class="muted" style="margin:0">Creada por <b>${esc(getUserByName(discussion.owner).nick)}</b> (@${esc(getUserByName(discussion.owner).username)}) el ${formatDate(discussion.created_at)}</p>
 
         <div class="conversation_messages" id="conversation_messages">
             ${msgs}

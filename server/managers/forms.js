@@ -78,6 +78,10 @@ class FormResponse {
             created_at: this.created_at,
         };
     }
+
+    async delete() {
+        return this.formsManager.deleteFormResponse(this.id);
+    }
 }
 
 
@@ -91,6 +95,16 @@ class FormManager {
     async getForms() {
         const rows = await this.db.all(`SELECT * FROM forms ORDER BY created_at DESC`);
         return rows.map(row => new Form(this, row));
+    }
+
+    /**
+     * Gets a form by its ID.
+     * @param {string} id The ID of the form to find.
+     * @returns {Promise<Form|null>} The form if found, otherwise null.
+     */
+    async getFormById(formId) {
+        const [rows] = await this.db.get(`SELECT * FROM forms WHERE id = ?`, [formId]);
+        return rows.length ? new Form(this, rows[0]) : null;
     }
 
     /**
@@ -108,16 +122,6 @@ class FormManager {
     }
     
     /**
-     * Finds a form by its ID.
-     * @param {string} id The ID of the form to find.
-     * @returns {Promise<Form|null>} The form if found, otherwise null.
-     */
-    async findFormById(formId) {
-        const [rows] = await this.db.get(`SELECT * FROM forms WHERE id = ?`, [formId]);
-        return rows.length ? new Form(this, rows[0]) : null;
-    }
-
-    /**
      * Updates a form with the given ID using the provided data.
      * @param {string} formId Form ID to update.
      * @param {*} formData Fields to update.
@@ -130,9 +134,8 @@ class FormManager {
             max_responses: formData.max_responses,
         }
 
-
         const updates = Object.entries(fields).filter(([_, value]) => value !== undefined)
-        const form = await this.findFormById(formId);
+        const form = await this.getFormById(formId);
         if (!form) return null;
 
         const connection = await this.db.getConnection();
@@ -145,7 +148,7 @@ class FormManager {
                 await connection.run(`UPDATE forms SET ${setClause} WHERE id = ?`, [...values, formId]);
             }
             await connection.commit();
-            return this.findFormById(formId);
+            return this.getFormById(formId);
 
         } catch (error) {
             await connection.rollback();
@@ -154,12 +157,6 @@ class FormManager {
         } finally {
             connection.release();
         }
-        // await this.db.run(`
-        //     UPDATE forms 
-        //     SET title = ?, description = ?, anonymous = ?, max_responses = ? 
-        //     WHERE id = ?
-        // `, [formData.title, formData.description, formData.anonymous, formData.max_responses, formId]);
-        // return this.getFormById(formId);
     }
 
     /**
@@ -291,5 +288,4 @@ class FormManager {
         const rows = await this.db.all("SELECT * FROM forms_responses WHERE form_id = ? AND responder = ? ORDER BY created_at DESC", [formId, responder]);
         return rows.map(row => new FormResponse(this, row));
     }
-
 }

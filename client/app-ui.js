@@ -330,7 +330,7 @@ function heroHtml() {
             </div>
             
             <div class="hero-body">
-                <span class="eyebrow">Última noticia · ${fmtDay(latest.created_at)}</span>
+                <span class="eyebrow">Última noticia · ${formatDay(latest.created_at)}</span>
                 <h2>${esc(latest.title)}</h2>
                 
                 <div class="md clamp">
@@ -414,7 +414,7 @@ function refreshBell() {
     const bellDot = document.querySelector("#news_notifications_button .dot");
     if (bellDot)
         bellDot.hidden = !news.some(
-            (item) => isRecent(item.created_at),
+            (item) => isDateRecent(item.created_at),
         );
 }
 
@@ -427,17 +427,17 @@ function statsHtml() {
     const row = (attribute, targetId, title, isoDate) => `
         <button class="mini-row" ${attribute}="${targetId}">    
             <b>${esc(title)}</b>
-            <small>${fmtDay(isoDate)}</small>
+            <small>${formatDay(isoDate)}</small>
         </button>`;
 
     const inProgress = projects
         .filter((project) => project.status === "En progreso")
-        .sort(newestFirstBy("created_at"));
+        .sort(getSorterByField("created_at"));
 
-    const recentNews = sortedNews().filter((item) => isRecent(item.created_at));
+    const recentNews = sortedNews().filter((item) => isDateRecent(item.created_at));
     const recentDiscussions = discussions
-        .filter((discussion) => isRecent(discussion.created_at))
-        .sort(newestFirstBy("created_at"));
+        .filter((discussion) => isDateRecent(discussion.created_at))
+        .sort(getSorterByField("created_at"));
 
     const card = (title, iconName, tone, items, toRow) => `
         <section class="stat-card">
@@ -489,7 +489,7 @@ const tagsHtml = (tags) =>
 const sortedNews = () =>
     news
         .slice()
-        .sort(newestFirstBy("created_at"));
+        .sort(getSorterByField("created_at"));
 
 
 // Genera el HTML para la sección de noticias en el panel laaterl, mostrando las noticias más recientes y un botón para ver todas las noticias.
@@ -505,7 +505,7 @@ function newsPanel() {
             .map((item) =>
                 `<button class="drow" data-gonews>
                     <b>${esc(item.title)}</b>
-                    <small>${fmtDay(item.created_at)}</small>
+                    <small>${formatDay(item.created_at)}</small>
                 </button>`,
             ).join("") || '<p class="muted">Aún no hay noticias.</p>';
 
@@ -515,7 +515,7 @@ function newsPanel() {
 
 
 function renderNews() {
-    const canManage = API.isAdmin(API.ME);
+    const canManage = API.userIsAdmin(API.ME);
     const items =
         sortedNews()
             .map((item) => `
@@ -525,7 +525,7 @@ function renderNews() {
                     <div class="uhd">
                         <h3>${esc(item.title)}</h3>
                         
-                        <span class="muted">${fmtDate(item.created_at)}</span>
+                        <span class="muted">${formatDate(item.created_at)}</span>
                         
                         ${canManage ? `
                         <div class="actw">
