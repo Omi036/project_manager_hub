@@ -1,7 +1,7 @@
 const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateJsonBody, validateRequest } = require("../validation");
-const { DiscussionManager } = require("./discussions");
+const { DiscussionsManager } = require("./discussions");
 const { FormManager } = require("./forms");
 
 class Project {
@@ -220,8 +220,8 @@ class ProjectsManager {
      * @param {Object} [db=this.db] Database pool or connection to query.
      * @returns {Promise<Project|null>} The matching project, or null.
      */
-    async findProjectById(projectId, db = this.db) {
-        const [rows] = await db.query(`
+    async findProjectById(projectId) {
+        const [rows] = await this.db.query(`
             SELECT id, title, icon, icon_color, status, description,
                    tags, owner_name, owner_username, created_at, created_by
             FROM projects
@@ -341,7 +341,7 @@ class ProjectsManager {
         for (const row of rows) {
             // If relation is a discussion, fetch the discussion data
             if (row.type === 'discussion') {
-                const discussionManager = new DiscussionManager(this.db);
+                const discussionManager = new DiscussionsManager(this.db);
                 const discussion = await discussionManager.findDiscussionById(row.related_id);
 
                 if (!discussion) {
@@ -375,7 +375,7 @@ class ProjectsManager {
 
             } else if (row.type === 'contract') {
                 const contractManager = new ContractManager(this.db);
-                const contract = await contractManager.findContractById(row.related_id);
+                const contract = await contractManager.getContractById(row.related_id);
 
                 if (!contract) {
                     // Handle the case where the contract is not found

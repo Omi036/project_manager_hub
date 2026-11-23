@@ -11,6 +11,7 @@ const { ProjectsManager } = require("./managers/projects");
 const { UsersManager } = require("./managers/users");
 const { DiscussionsManager } = require("./managers/discussions");
 const { NewsManager } = require("./managers/news");
+const { ContractManager } = require("./managers/contracts").
 
 require('dotenv').config({ quiet: true });
 
@@ -61,6 +62,7 @@ app.use("/api", apiLimiter, createAuthMiddleware(pool, {
         "/users/all",
         "/discussions/all",
         "/news/all",
+        "/contracts/all"
     ],
     publicGetPrefixes: ["/discussions/", "/projects/"],
 }));
@@ -77,6 +79,7 @@ router.use("/projects",    new ProjectsManager(pool).createRouter());
 router.use("/users",       new UsersManager(pool).createRouter());
 router.use("/discussions", new DiscussionsManager(pool).createRouter());
 router.use("/news",        new NewsManager(pool).createRouter());
+router.use("/contracts",   new ContractManager(pool).createRouter());
 app.use("/api", router);
 
 

@@ -126,19 +126,20 @@ CREATE TABLE IF NOT EXISTS forms_responses (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS contract {
+CREATE TABLE IF NOT EXISTS contract (
     id         VARCHAR(64) PRIMARY KEY,
     title      VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     issuer     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-}
+);
 
 CREATE TABLE IF NOT EXISTS contract_signatures (
     id          VARCHAR(64) PRIMARY KEY,
     contract_id VARCHAR(64) NOT NULL REFERENCES contract(id) ON DELETE CASCADE,
     signer      VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_contract_signer (contract_id, signer)
 );
 
 CREATE INDEX idx_contracts_created_at
