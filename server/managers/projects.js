@@ -374,7 +374,6 @@ class ProjectsManager {
                 });
 
             } else if (row.type === 'contract') {
-                /*
                 const contractManager = new ContractManager(this.db);
                 const contract = await contractManager.findContractById(row.related_id);
 
@@ -389,7 +388,6 @@ class ProjectsManager {
                     comment: row.comment,
                     related: contract,
                 });
-                */
             }
 
         } 

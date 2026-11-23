@@ -141,6 +141,8 @@ CREATE TABLE IF NOT EXISTS contract_signatures (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX idx_contracts_created_at
+    ON contract (created_at DESC);
 
 CREATE INDEX idx_projects_created_at
     ON projects (created_at DESC);

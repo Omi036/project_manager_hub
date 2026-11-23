@@ -87,44 +87,6 @@ class ContractManager {
     }
 
     /**
-     * Updates a contract with the given ID using the provided data.
-     * @param {string} contractId The ID of the contract to update.
-     * @param {Object} contractData The data to update the contract with.
-     * @returns {Promise<Contract | null>} The updated contract if found, otherwise null.
-     */
-    async updateContract(contractId, contractData) {
-        const fields = {
-            title: contractData.title,
-            content: contractData.content,
-            issuer: contractData.issuer,
-        }
-
-        const updates = Object.entries(fields).filter(([_, value]) => value !== undefined)
-        const contract = await this.getContractById(contractId);
-        if(!contract) return null;
-
-        const connection = await this.db.getConnection();
-
-        try {
-            await connection.beginTransaction();
-            if(updates.length > 0) {
-                const setClause = updates.map(([key, _]) => `${key} = ?`).join(', ');
-                const values = updates.map(([_, value]) => value);
-                await connection.run(`UPDATE contract SET ${setClause} WHERE id = ?`, [...values, contractId]);
-            }
-            await connection.commit();
-            return this.getContractById(contractId);
-
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-
-        } finally {
-            await connection.release();
-        }
-    }      
-
-    /**
      * Deletes a contract with the given ID.
      * @param {string} contractId The ID of the contract to delete.
      * @returns {Promise<boolean>} True if the contract was deleted, false otherwise.
@@ -194,5 +156,210 @@ class ContractManager {
     async deleteContractSignature(signatureId) {
         const [result] = await this.db.run(`DELETE FROM contract_signatures WHERE id = ?`, [signatureId]);
         return result.affectedRows > 0;
+    }
+}
+
+
+
+class ContractRouter {
+    static createRouter(contractManager) {
+        const router = express.Router();
+
+        /**
+         * GET /all
+         * Returns all contracts in the system.
+         */
+        router.get("/all", async (req, res) => {
+            try {
+                const contracts = await contractManager.getContracts();
+                res.json(contracts);
+
+            } catch (error) {
+                console.error("Error fetching contracts:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
+
+        /**
+         * GET /:id
+         * @param {string} id - The ID of the contract to retrieve.
+         * Returns a specific contract by its ID.
+         */
+        router.get("/:id", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
+            const contractId = req.params.id;
+
+            try {
+                const contract = await contractManager.getContractById(contractId);
+                if(contract) {
+                    res.json(contract);
+                } else {
+                    res.status(404).json({ error: "Contract not found" });
+                }
+
+                
+            } catch (error) {
+                console.error("Error fetching contract:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        })
+
+
+        /**
+         * POST /create
+         * @body {Object} body - The contract data to create.
+         * Creates a new contract with the provided data.
+         */
+        router.post("/create", validateRequest({
+            body: {
+                title: { type: "string", required: true, maxLength: 200 },
+                content:  { type: "string", maxLength: 65535 },
+                created_at: { type: "string", format: "date-time" }
+            }
+        }), async (req, res) => {
+            try {
+                const newContract = await contractManager.createContract({
+                    ...req.body,
+                    issuer: req.user.username
+                });
+                res.status(201).json(newContract);
+                
+            } catch (error) {
+                console.error("Error creating contract:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        })
+
+
+
+        /**
+         * DELETE /:id
+         * @param {string} id - The ID of the contract to delete.
+         * Deletes a specific contract by its ID.
+         */
+        router.delete("/:id", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
+            const contractId = req.params.id;
+
+            try {
+                const contract = await contractManager.getContractById(contractId);
+                if (!contract) {
+                    return res.status(404).json({ error: "Contract not found" });
+                }
+
+                if (contract.issuer !== req.user.username && req.user.role !== 'admin') {
+                    return res.status(403).json({ error: "You are not authorized to delete this contract" });
+                }
+
+                const isDeleted = await contractManager.deleteContract(contractId);
+                if (isDeleted) {
+                    res.status(200).json({ message: "Contract deleted successfully" });
+                } else {
+                    res.status(404).json({ error: "Contract not found" });
+                }
+                
+            } catch (error) {
+                console.error("Error deleting contract:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
+
+        /**
+         * GET /:id/signatures
+         * @param {string} id - The ID of the contract to retrieve signatures for.
+         * Returns all signatures for a specific contract by its ID.
+         */
+        router.get("/:id/signatures", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
+            const contractId = req.params.id;
+
+            try {
+                const contract = await contractManager.getContractById(contractId);
+                if (!contract) {
+                    return res.status(404).json({ error: "Contract not found" });
+                }
+                
+                // Check if the user is the issuer of the contract or an admin
+                if(contract.issuer !== req.user.username && req.user.role !== 'admin') {
+                    return res.status(403).json({ error: "You are not authorized to view signatures for this contract" });
+                }
+
+                const signatures = await contractManager.getContractSignaturesByContractId(contractId);
+                res.json(signatures);
+            } catch (error) {
+                console.error("Error fetching contract signatures:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
+
+        /**
+         * GET /:id/signatures/:signatureId
+         * @param {string} id - The ID of the contract.
+         * @param {string} signatureId - The ID of the signature to retrieve.
+         * Returns a specific signature for a contract by its ID.
+         */
+        router.get("/:id/signatures/:signatureId", validateRequest({
+            params: { 
+                id: { type: "identifier" },
+                signatureId: { type: "identifier" }
+            },
+        }), async (req, res) => {
+            const contractId = req.params.id;
+            const signatureId = req.params.signatureId;
+
+            try {
+                const contract = await contractManager.getContractById(contractId);
+                if (!contract) {
+                    return res.status(404).json({ error: "Contract not found" });
+                }
+
+                const signature = await contractManager.getContractSignatureById(signatureId);
+                if (!signature || signature.contract_id !== contractId) {
+                    return res.status(404).json({ error: "Signature not found for this contract" });
+                }
+
+                if(contract.issuer !== req.user.username && req.user.role !== 'admin' && signature.signer !== req.user.username) {
+                    return res.status(403).json({ error: "You are not authorized to view this signature" });
+                }
+
+                res.json(signature);
+            } catch (error) {
+                console.error("Error fetching contract signature:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
+
+        /**
+         * GET /signatures/:signer
+         * @param {string} signer - The username of the signer to retrieve signatures for.
+         * Returns all signatures for a specific signer.
+         */
+        router.get("/signatures/:signer", validateRequest({
+            params: { signer: { type: "string" } },
+        }), async (req, res) => {
+            const signer = req.params.signer;
+
+            try {
+                if (signer !== req.user.username && req.user.role !== 'admin') {
+                    return res.status(403).json({ error: "You are not authorized to view signatures for this signer" });
+                }
+
+                const signatures = await contractManager.getContractSignaturesBySigner(signer);
+                res.json(signatures);
+            } catch (error) {
+                console.error("Error fetching contract signatures by signer:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
+
+        return router;
     }
 }
