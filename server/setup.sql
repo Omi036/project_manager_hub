@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS project_relation (
     project_id       VARCHAR(64) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     comment          TEXT,
-    type             VARCHAR(20) NOT NULL CHECK (type IN ('discussion', 'form', 'contract')),
+    type             VARCHAR(20) NOT NULL CHECK (type IN ('discussion', 'form', 'contract', 'link')),
     related_id       VARCHAR(64) NOT NULL,
     PRIMARY KEY (project_id, type, related_id)
 );

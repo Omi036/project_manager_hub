@@ -412,6 +412,9 @@ class ProjectsManager {
                 }
 
                 relatedObject = contract
+
+            } else if (row.type === 'link') {
+                relatedObject = {}
             }
             
             parsedRelations.push(new ProjectRelation(this, {
