@@ -70,7 +70,7 @@ function renderPage() {
     }
 
     // Si el hash es "#discusion-<ID>", renderiza la vista de discusión.
-    const discussionMatch = location.hash.match(/^#discusion-([A-Za-z0-9_-]+)$/);
+    const discussionMatch = location.hash.match(/^#discussion-([A-Za-z0-9_-]+)$/);
     const currentDiscussion = discussionMatch && API.findDiscussion(discussionMatch[1]);
     if (currentDiscussion) {
         renderChat(currentDiscussion);
@@ -117,7 +117,12 @@ function renderProjects() {
         <div class="empty">
             <h2>${API.projectsError ? "No se pudieron cargar los proyectos" : "Aún no hay proyectos"}</h2>
             <p>${API.projectsError ? "Comprueba la conexión e inténtalo de nuevo." : "Crea el primero para verlo aquí."}</p>
-            ${API.projectsError ? '<button class="btn pri" data-retryprojects>Reintentar</button>' : '<button class="btn pri" data-new>+ Crear proyecto</button>'}
+            ${API.projectsError 
+                ? '<button class="btn pri" data-retryprojects>Reintentar</button>' 
+                : API.isAuthenticated && console.log(API.isAuthenticated)
+                    ? '<button class="btn pri" data-new>+ Crear proyecto</button>' 
+                    : ''
+            }
         </div>`;
         return;
     }
@@ -210,7 +215,7 @@ function renderDetail(project) {
             <div class="actw">
                 <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones del proyecto">⋯</button>
                 <div class="acts">
-                    <button class="btn" data-edit="${project.id}">Editar</button>
+                    ${API.userCanEditItem(project) ? `<button class="btn" data-edit="${project.id}">Editar</button>` : ""}
                     ${API.userCanDeleteItem(project) ? `<button class="btn del" data-del="${project.id}">Eliminar</button>` : ""}
                 </div>
             </div>
@@ -247,6 +252,11 @@ function renderDetail(project) {
                     <div class="chips">${chips}</div>
                 </section>
 
+                <section class="${project.relations.length ? "" : "side-section--empty"}">
+                    <h3>Relaciones</h3>
+                    ${relationsHtml(project.relations)}
+                </section>
+
                 <section class="${project.funding.length ? "" : "side-section--empty"}">
                     <h3>Financiación</h3>
                     ${fund}
@@ -257,7 +267,7 @@ function renderDetail(project) {
         <section class="updates">
             <div class="uh">
                 <h2>Updates</h2>
-                <button class="btn pri" data-newup="${project.id}">+ Añadir update</button>
+                ${API.userCanEditItem(project) ? `<button class="btn pri" data-newup="${project.id}">+ Añadir update</button>` : ""}
             </div>
             ${updatesDom}
         </section>
@@ -283,6 +293,7 @@ function openForm(project) {
             owner_name: API.currentUser().nick,
             collabs: [],
             funding: [],
+            relations: [],
             status: "Ideado",
             created_at: new Date().toISOString(),
         };
@@ -347,6 +358,14 @@ function openForm(project) {
         </div>
     </div>
 
+    <div class="lbl">Relaciones
+        <div id="project_relations_list" style="display:flex;flex-direction:column;gap:8px"></div>
+    
+        <div>
+            <button type="button" class="btn" data-addrelation>+ Añadir relación</button>
+        </div>
+    </div>
+
     <div class="actions">
         <button type="button" class="btn" data-cancel>Cancelar</button>
         <button type="submit" class="btn pri">Guardar proyecto</button>
@@ -356,6 +375,7 @@ function openForm(project) {
     drawTablerPicker();
     drawChips();
     drawFund();
+    drawRelations();
 
     // Muestra el diálogo del formulario y enfoca el campo de título.
     dlg.showModal();
@@ -382,6 +402,30 @@ function drawFund() {
             <input type="text" data-fa="${index}" value="${esc(fundingEntry.what)}" placeholder="Cantidad o recurso" aria-label="Cantidad o recurso">
             
             <button type="button" class="x" data-delfund="${index}" aria-label="Quitar aportación">×</button>
+        </div>`,
+    ).join("");
+}
+
+
+// Renderiza la lista de relaciones en el formulario
+function drawRelations(){
+    console.log("Yes")
+    $("#project_relations_list").innerHTML = projectDraft.relations.map((relation, index) => `
+        <div class="fr" style="display:flex;flex-direction:column;gap:4px">
+            <div class="fr" style="grid-template-columns: 0.5fr 1fr auto">
+                <select data-rt="${index}" aria-label="Tipo de relación">
+                    <option value="discussion" ${relation.type === "discussion" ? "selected" : ""}>Discusión</option>
+                    <option value="form" ${relation.type === "form" ? "selected" : ""}>Formulario</option>
+                    <option value="contract" ${relation.type === "contract" ? "selected" : ""}>Contrato</option>
+                </select>
+                <input type="text" data-rco="${index}" value="${esc(relation.comment)}" placeholder="Comentario (opcional)" aria-label="Comentario (opcional)">
+                <button type="button" class="x" data-delrelation="${index}" aria-label="Quitar relación">×</button>
+            </div>
+
+            <div>
+                <input type="text" data-rid="${index}" style="width:100%" value="${esc(relation.related_id)}" placeholder="ID relacionado" aria-label="ID relacionado">
+            </div>
+            
         </div>`,
     ).join("");
 }
@@ -514,6 +558,17 @@ document.addEventListener("click", (event) => {
     } else if (readData("delfund")) {
         projectDraft.funding.splice(+readData("delfund"), 1);
         drawFund();
+
+    // Agrega una nueva entrada de relaciones al proyecto
+    } else if (hasData("addrelation")) {
+        projectDraft.relations.push({ comment: "", type: "discussion", related_id: "" });
+        drawRelations();
+        const relationsInputs = document.querySelectorAll("[data-rt]");
+        relationsInputs[relationsInputs.length - 1].focus();
+
+    // Redirecciona si se ha hecho click en una relacion
+    } else if (hasData("related")) {
+        location.hash = readData("related")
     }
 });
 
@@ -529,6 +584,19 @@ form.addEventListener("input", (event) => {
     // Actualiza la cantidad o recurso que aporta en la financiación según el índice del dataset.
     else if (eventTarget.dataset.fa !== undefined)
         projectDraft.funding[+eventTarget.dataset.fa].what = eventTarget.value;
+
+    // Actualiza el tipo de relación según el índice del dataset.
+    else if (eventTarget.dataset.rt !== undefined) {
+        projectDraft.relations[+eventTarget.dataset.rt].type = eventTarget.value;
+    }
+
+    else if (eventTarget.dataset.rco !== undefined) {
+        projectDraft.relations[+eventTarget.dataset.rco].comment = eventTarget.value;
+    }
+
+    else if (eventTarget.dataset.rid !== undefined) {
+        projectDraft.relations[+eventTarget.dataset.rid].related_id = eventTarget.value;
+    }
 });
 
 
@@ -556,6 +624,7 @@ form.addEventListener("submit", async (event) => {
         owner_name: $("#project_owner_input").value.trim(),
         collabs: projectDraft.collabs,
         funding: projectDraft.funding.filter((fundingEntry) => fundingEntry.who.trim() || fundingEntry.what.trim()),
+        relations: projectDraft.relations.filter((relation) => relation.related_id.trim() || relation.comment.trim() || relation.type.trim()),
         status: $("#project_status_select").value,
         tags: parseTags($("#project_tags_input").value),
     };

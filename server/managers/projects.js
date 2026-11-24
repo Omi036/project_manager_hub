@@ -51,7 +51,14 @@ class Project {
     /** @returns {Promise<Object[]>} The project's funding entries. */
     getFunding() { return this.projectsManager.getProjectFunding(this.id) }
     /** @returns {Promise<ProjectUpdate[]>} The project's updates. */
-    getUpdates() { return this.projectsManager.getProjectUpdates(this.id) }
+    getUpdates() { return this.projectsManager.getProjectUpdates(this.id) } 
+
+    /** @param {ProjectRelation} relation Relation to add. */
+    addRelation(relation) { return this.projectsManager.addProjectRelation(this.id, relation) }
+    /** @param {number|string} relationId Relation ID to remove. */
+    removeRelation(relationId) { return this.projectsManager.removeProjectRelation(this.id, relationId) }
+
+
     /** @param {Object|string} collaborator Collaborator to add. */
     addCollaborator(collaborator) { return this.projectsManager.addProjectCollaborator(this.id, collaborator) }
     /** @param {string} collaboratorName Collaborator name to remove. */
@@ -62,6 +69,7 @@ class Project {
     removeFunding(fundingId) { return this.projectsManager.removeProjectFunding(this.id, fundingId) }
     /** @returns {Promise<Object|null>} The project's owner, if found. */
     getOwnerUser() { return this.projectsManager.getProjectOwner(this.owner_username)}
+    
 
     /**
      * Checks whether a username belongs to the project owner.
@@ -100,6 +108,31 @@ class Project {
     update(updatedData) { return this.projectsManager.updateProject(this.id, updatedData) }
     /** @returns {Promise<boolean>} Whether the project was deleted. */
     delete() { return this.projectsManager.deleteProject(this.id)}
+}
+
+
+class ProjectRelation {
+    constructor(projectsManager, { project_id, comment, type, related_id, related }) {
+        this.projectsManager = projectsManager;
+        this.project_id = project_id;
+        this.comment = comment;
+        this.type = type;
+        this.related = related
+        this.related_id = related_id;
+    }
+
+    toJSON(){
+        return {
+            project_id: this.project_id,
+            comment: this.comment,
+            type: this.type,
+            related_id: this.related_id
+        }
+    }
+
+    delete() { 
+        return this.projectsManager.removeProjectRelation(this.project_id, this.related_id)
+    }
 }
 
 class ProjectUpdate {
@@ -260,7 +293,7 @@ class ProjectsManager {
             await connection.beginTransaction();
             if (updates.length) {
                 const values = updates.map(([, value]) => value);
-                const assignments = updates.map(([field]) => `${columnNames[field]} = ?`);
+                const assignments = updates.map(([field]) => `${field} = ?`);
                 await connection.query(`
                     UPDATE projects
                     SET ${assignments.join(", ")}
@@ -268,7 +301,9 @@ class ProjectsManager {
                 `, [...values, projectId]);
             }
 
+            // Updates foreign tables
             await this._replaceProjectRelations(projectId, updatedData, connection);
+
             await connection.commit();
             return this.findProjectById(projectId, connection);
 
@@ -331,7 +366,7 @@ class ProjectsManager {
      */
     async getProjectRelations(projectId) {
         const [rows] = await this.db.query(`
-            SELECT type, related_id
+            SELECT *
             FROM project_relation
             WHERE project_id = ?
         `, [projectId]);
@@ -339,6 +374,7 @@ class ProjectsManager {
         // Obtain every related object for the given relations
         const parsedRelations = [];
         for (const row of rows) {
+            var relatedObject
             // If relation is a discussion, fetch the discussion data
             if (row.type === 'discussion') {
                 const discussionManager = new DiscussionsManager(this.db);
@@ -350,11 +386,7 @@ class ProjectsManager {
                     continue; // Skip this relation if the discussion is not found
                 }
 
-                parsedRelations.push({
-                    type: row.type,
-                    comment: row.comment,
-                    related: discussion,
-                });
+                relatedObject = discussion
 
             // If relation is a form, fetch the form data
             } else if (row.type === 'form') {
@@ -367,11 +399,7 @@ class ProjectsManager {
                     continue; // Skip this relation if the form is not found
                 }
 
-                parsedRelations.push({
-                    type: row.type,
-                    comment: row.comment,
-                    related: form,
-                });
+                relatedObject = form
 
             } else if (row.type === 'contract') {
                 const contractManager = new ContractManager(this.db);
@@ -383,13 +411,16 @@ class ProjectsManager {
                     continue; // Skip this relation if the contract is not found
                 }
 
-                parsedRelations.push({
-                    type: row.type,
-                    comment: row.comment,
-                    related: contract,
-                });
+                relatedObject = contract
             }
-
+            
+            parsedRelations.push(new ProjectRelation(this, {
+                project_id: row.project_id,
+                type: row.type,
+                comment: row.comment,
+                related: relatedObject,
+                related_id: row.related_id,
+            }));
         } 
 
         return parsedRelations;
@@ -633,6 +664,25 @@ class ProjectsManager {
                 );
             }
         }
+
+        // Handle element relations
+        if (projectData.relations !== undefined) {
+            if(!Array.isArray(projectData.relations)) {
+                throw new Error("Project relations must be an array")
+            }
+
+            await db.query("DELETE FROM project_relation WHERE project_id = ?", [projectId]);
+            for (const relation of projectData.relations) {
+                const { type, comment, related_id } = this._normalizeRelation(relation);
+
+                await db.query(
+                    `INSERT INTO project_relation
+                        (project_id, type, comment, related_id)
+                     VALUES (?, ?, ?, ?)`,
+                    [projectId, type, comment, related_id],
+                );
+            }
+        }
     }
 
     _normalizeCollaborator(collaborator) {
@@ -658,6 +708,18 @@ class ProjectsManager {
             contributor: String(funding.who ?? funding.contributor ?? "").trim(),
             contribution: String(funding.what ?? funding.contribution ?? "").trim(),
         };
+    }
+
+    _normalizeRelation(relation) {
+        if(!relation || typeof relation !== "object") {
+            throw new TypeError("Each project relation must be an object");
+        }
+
+        return {
+            type: String(relation.type ?? "").trim(),
+            comment: String(relation.comment ?? "").trim(),
+            related_id: String(relation.related_id ?? "").trim(),
+        }
     }
 
     /**
@@ -749,6 +811,7 @@ class ProjectsRouter {
             collabs: { type: "array" },
             collaborators: { type: "array" },
             funding: { type: "array" },
+            relations: { type: "array" },
         }, { oneOfRequired: [["description"]] }), async (req, res) => {
             try {
                 const newProject = await projectsManager.createProject({
@@ -764,6 +827,28 @@ class ProjectsRouter {
                 res.status(400).json({ error: "Error creating project" });
             }
         });
+
+        /**
+         * GET /:id/relations
+         * @param {string} id - The ID of the project.
+         * Retrieves the project's relations.
+         */
+        router.get("/:id/relations", validateRequest({
+            params: { id: { type: "identifier" } },
+        }), async (req, res) => {
+            const projectId = req.params.id;
+            try {
+                const relations = await projectsManager.getProjectRelations(projectId);
+                res.json(relations);
+
+            } catch (error) {
+                console.error(`Error fetching relations for project ID ${projectId}:`, error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+        // TODO: Add and remove a relation
+
 
         /**
          * GET /:id/collaborators
@@ -1172,6 +1257,7 @@ class ProjectsRouter {
                     created_by: { type: "string", maxLength: 50 },
                     collabs: { type: "array" },
                     collaborators: { type: "array" },
+                    relations: { type: "array" },
                     funding: { type: "array" },
                 },
             },

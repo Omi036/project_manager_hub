@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS forms_responses (
 CREATE TABLE IF NOT EXISTS contract (
     id         VARCHAR(64) PRIMARY KEY,
     title      VARCHAR(200) NOT NULL,
-    content TEXT NOT NULL,
+    content    TEXT NOT NULL,
     issuer     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE RESTRICT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

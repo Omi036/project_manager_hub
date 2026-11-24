@@ -484,6 +484,39 @@ const tagsHtml = (tags) =>
         ? `<div class="chips">${tags.map((tag) => `<span class="chip tag">${esc(tag)}</span>`).join("")}</div>`
         : '<span class="muted">Sin etiquetas</span>';
 
+const relationsHtml = (relations) => {
+    var html = "";
+
+    relations.forEach((relation) => {
+        var title;
+
+        // fetches the relation title
+        switch (relation.type) {
+            case "discussion":
+                const discussion = API.findDiscussion(relation.related_id)
+                title = discussion ? discussion.title : "Discusión ???";
+                break;
+
+            case "form": 
+                break;
+
+            case "contract":
+                break;
+        }
+
+        html += `
+        <button class="chip relation ${relation.type}" data-related='${relation.type + "-" + relation.related_id}'>
+            ${tablerSvg(relation.type === "discussion" ? "messages" : "file-text", 32)}
+            <div class="fc">
+                <p class = 'relation-comment'>${esc(relation.comment)}</p>
+                <p class = 'relation-title'>${esc(title)}</p>
+            </div>
+        </button>`;
+    });
+
+    return html;
+}
+
 
 // Devuelve las noticias ordenadas por fecha de creación, de más reciente a más antigua
 const sortedNews = () =>

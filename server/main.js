@@ -11,7 +11,7 @@ const { ProjectsManager } = require("./managers/projects");
 const { UsersManager } = require("./managers/users");
 const { DiscussionsManager } = require("./managers/discussions");
 const { NewsManager } = require("./managers/news");
-const { ContractManager } = require("./managers/contracts").
+const { ContractManager } = require("./managers/contracts");
 
 require('dotenv').config({ quiet: true });
 
@@ -30,7 +30,7 @@ function positiveIntegerEnv(name, fallback) {
     return parsed;
 }
 
-const rateLimitWindowMs = positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000);
+const rateLimitWindowMs = positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", 3 * 60 * 1000);
 const apiRateLimitMax = positiveIntegerEnv("API_RATE_LIMIT_MAX", 100);
 const authRateLimitMax = positiveIntegerEnv("AUTH_RATE_LIMIT_MAX", 10);
 
@@ -96,5 +96,12 @@ app.use((error, request, response, next) => {
 
 
 app.listen(process.env.PORT, process.env.HOST, () => {
-    console.log(`Server is running on: http://${process.env.HOST}:${process.env.PORT}`);
+    pool.query("SELECT 1")
+        .then(() => console.log("Database connection successful"))
+        .catch((err) => {
+            console.error("Database connection failed:", err);
+            process.exit(1);
+        }).finally(() => {
+            console.log(`Server is running on: http://${process.env.HOST}:${process.env.PORT}`);
+        });
 });

@@ -106,6 +106,7 @@ class API {
             collabs: relations.collabs ?? project.collabs ?? [],
             funding: relations.funding ?? project.funding ?? [],
             updates: relations.updates ?? project.updates ?? [],
+            relations: relations.relations ?? project.relations ?? [],
         };
     }
 
@@ -119,17 +120,28 @@ class API {
         };
     }
 
+    static #normalizeRelation(relation) {
+        return {
+            project_id: relation.project_id,
+            comment: relation.comment,
+            type: relation.type,    
+            related_id: relation.related_id
+        }
+    }
+
     // Hidrata un proyecto con sus relaciones (colaboradores, financiación y actualizaciones) obtenidas de la API.
     static async #hydrateProject(project) {
-        const [collabs, funding, updates] = await Promise.all([
+        const [collabs, funding, updates, relations] = await Promise.all([
             API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/collaborators`),
             API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/funding`),
             API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/updates`),
+            API.#requestJson(`/api/projects/${encodeURIComponent(project.id)}/relations`),
         ]);
         return API.#normalizeProject(project, {
             collabs: collabs.map((collaborator) => collaborator.name ?? collaborator),
             funding,
             updates: updates.map((update) => API.#normalizeUpdate(update)),
+            relations: relations.map((relation) => API.#normalizeRelation(relation)),
         });
     }
 
@@ -317,6 +329,16 @@ class API {
         return actorUsername === creatorUsername || API.userIsAdmin(actorUsername);
     }
 
+    // Verifica si un usuario puede modificar un elemento segun si es colaborador, creador o admin
+    static userCanEditItem(item, actorUsername = API.ME){
+        if(!item) return false;
+
+        const creatorUsername = item.created_by || item.owner_username || getUserByName(item.owner).username;
+        const isCollaborator = item.collabs?.some((collab) => collab.username === actorUsername);
+
+        return actorUsername === creatorUsername || API.userIsAdmin(actorUsername) || isCollaborator;
+    }
+
 
 
 
@@ -377,6 +399,7 @@ class API {
         const normalized = API.#normalizeProject(project, {
             collabs: fields.collabs || [],
             funding: fields.funding || [],
+            relations: fields.relations || [],
             updates: [],
         });
         API.#projects.unshift(normalized);

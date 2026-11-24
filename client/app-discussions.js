@@ -204,10 +204,11 @@ function renderChat(discussion) {
 
                 <div class="mh">
                     <b>${esc(user.nick)}</b>
-                    <span class="muted">@${esc(user.username)}
-                    </span>
 
                     ${user.username === getUserByName(discussion.owner).username ? '<span class="op">OP</span>' : ""}
+
+                    <span class="muted displaced">@${esc(user.username)}
+                    </span>
 
                     <span class="muted">${formatMessageDate(messages[0].created_at)}</span>
                 </div>
@@ -253,7 +254,7 @@ function renderChat(discussion) {
 
 // Envía un mensaje en la discusión actual, si hay texto válido en el textarea.
 async function sendMsg() {
-    const discussionMatch = location.hash.match(/^#discusion-([A-Za-z0-9_-]+)$/)
+    const discussionMatch = location.hash.match(/^#discussion-([A-Za-z0-9_-]+)$/)
     const textarea = $("#message_text_input");
 
     if (!discussionMatch || !textarea) return;
@@ -310,7 +311,7 @@ dform.addEventListener("submit", (event) => {
     API.createDiscussion(title)
         .then((discussion) => {
             ddlg.close();
-            location.hash = "discusion-" + discussion.id;
+            location.hash = "discussion-" + discussion.id;
         })
         .catch((error) => {
             console.error("No se pudo crear la discusión:", error);
@@ -339,7 +340,7 @@ document.addEventListener("click", (event) => {
 
 
     // Abre la discusion
-    if (clickedButton.dataset.opendisc) location.hash = "discusion-" + clickedButton.dataset.opendisc;
+    if (clickedButton.dataset.opendisc) location.hash = "discussion-" + clickedButton.dataset.opendisc;
     // Abre el dialogo de nueva discusion
     else if ("newdisc" in clickedButton.dataset) openNewDisc();
     // Cierra el dialogo de nueva discusion
