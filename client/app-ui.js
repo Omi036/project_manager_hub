@@ -157,6 +157,11 @@ const TABLER_ICONS = {
     shield: [
         "M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3",
     ],
+    link: [
+        "M9 15l6 -6",
+        "M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464",
+        "M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"
+    ]
 };
 
 const PICKABLE_ICONS = [
@@ -489,12 +494,21 @@ const relationsHtml = (relations) => {
 
     relations.forEach((relation) => {
         var title;
+        var metadata
 
         // fetches the relation title
         switch (relation.type) {
             case "discussion":
                 const discussion = API.findDiscussion(relation.related_id)
                 title = discussion ? discussion.title : "Discusión ???";
+                metadata = relation.type + "-" + relation.related_id
+                break;
+
+            case "link":
+                try { title = new URL(relation.related_id).hostname }
+                catch(err) { title = "" }
+
+                metadata = relation.type + "-" + window.btoa(relation.related_id)
                 break;
 
             case "form": 
@@ -505,8 +519,9 @@ const relationsHtml = (relations) => {
         }
 
         html += `
-        <button class="chip relation ${relation.type}" data-related='${relation.type + "-" + relation.related_id}'>
-            ${tablerSvg(relation.type === "discussion" ? "messages" : "file-text", 32)}
+        <button class="chip relation ${relation.type}" data-related='${esc(metadata)}'>
+            ${relation.type === "discussion" ? tablerSvg("messages", 32) : ""}
+            ${relation.type === "link" ? tablerSvg("link", 32) : ""}
             <div class="fc">
                 <p class = 'relation-comment'>${esc(relation.comment)}</p>
                 <p class = 'relation-title'>${esc(title)}</p>
@@ -552,23 +567,26 @@ function renderNews() {
     const items =
         sortedNews()
             .map((item) => `
-                <article class="upd paper">
+                <article class="upd paper new">
                     ${item.banner ? `<img class="newsbanner" src="${esc(item.banner)}" alt="" loading="lazy">` : ""}
                     
                     <div class="uhd">
                         <h3>${esc(item.title)}</h3>
                         
-                        <span class="muted">${formatDate(item.created_at)}</span>
+                        <div class="newsmetadata">
+                            <span class="muted newsdate">${formatDate(item.created_at)}</span>
+
+                            ${canManage ? `
+                            <div class="actw">
+                                <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones de la noticia">⋯</button>
+                                
+                                <div class="acts">
+                                    <button class="btn" data-editnews="${item.id}">Editar</button>
+                                    <button class="btn del" data-delnews="${item.id}">Eliminar</button>
+                                </div>
+                            </div>` : ""}
+                        </div>
                         
-                        ${canManage ? `
-                        <div class="actw">
-                            <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones de la noticia">⋯</button>
-                            
-                            <div class="acts">
-                                <button class="btn" data-editnews="${item.id}">Editar</button>
-                                <button class="btn del" data-delnews="${item.id}">Eliminar</button>
-                            </div>
-                        </div>` : ""}
 
                     </div>
                     
@@ -697,6 +715,7 @@ $("#news_button").onclick = () => {location.hash = "noticias"};
 // Escucha los cambios en el hash de la URL para actualizar la vista de la aplicación y cerrar cualquier sección expandida.
 window.addEventListener("hashchange", () => {
     expanded = false;
+    window.scrollTo(0, 0);
     render();
 });
 

@@ -409,14 +409,14 @@ function drawFund() {
 
 // Renderiza la lista de relaciones en el formulario
 function drawRelations(){
-    console.log("Yes")
     $("#project_relations_list").innerHTML = projectDraft.relations.map((relation, index) => `
-        <div class="fr" style="display:flex;flex-direction:column;gap:4px">
+        <div class="fr relation_entry" style="display:flex;flex-direction:column;gap:4px">
             <div class="fr" style="grid-template-columns: 0.5fr 1fr auto">
                 <select data-rt="${index}" aria-label="Tipo de relación">
                     <option value="discussion" ${relation.type === "discussion" ? "selected" : ""}>Discusión</option>
                     <option value="form" ${relation.type === "form" ? "selected" : ""}>Formulario</option>
                     <option value="contract" ${relation.type === "contract" ? "selected" : ""}>Contrato</option>
+                    <option value="link" ${relation.type === "link" ? "selected" : ""}>Enlace</option>
                 </select>
                 <input type="text" data-rco="${index}" value="${esc(relation.comment)}" placeholder="Comentario (opcional)" aria-label="Comentario (opcional)">
                 <button type="button" class="x" data-delrelation="${index}" aria-label="Quitar relación">×</button>
@@ -568,7 +568,23 @@ document.addEventListener("click", (event) => {
 
     // Redirecciona si se ha hecho click en una relacion
     } else if (hasData("related")) {
-        location.hash = readData("related")
+        const related_id = readData("related")
+
+        // If relation is a link
+        if(related_id.startsWith("link")) {
+            const decoded_uri = window.atob(related_id.substring(5))
+
+            if(decoded_uri.startsWith("!")){
+                window.open(decoded_uri.substring(1), "_blank").focus()
+            } else {
+                window.open(decoded_uri)
+            }
+
+        // If relation is not a link
+        } else {
+            location.hash = related_id
+        }
+        
     }
 });
 
