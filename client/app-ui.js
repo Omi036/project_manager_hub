@@ -561,6 +561,11 @@ function newsPanel() {
 }
 
 
+// Sets the main app html. The whole site is rendered inside app
+function setAppDOM(html) {
+    app.innerHTML = html;
+}
+
 
 function renderNews() {
     const canManage = API.userIsAdmin(API.ME);
@@ -597,7 +602,7 @@ function renderNews() {
             ).join("") || '<p class="muted">Aún no hay noticias.</p>';
 
 
-    app.innerHTML = `
+    setAppDOM(`
         <div class="head">
             <h1>Noticias</h1>
             <span>${news.length}</span>
@@ -611,8 +616,10 @@ function renderNews() {
         
         <div class="list news-list">
             ${items}
-        </div>`;
+        </div>`
+    )
 }
+
 
 
 // Variable para almacenar el ID de la noticia que se está editando

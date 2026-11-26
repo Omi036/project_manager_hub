@@ -92,7 +92,7 @@ class FormManager {
 
     /** @returns {Promise<Form[]>} All forms in the database, ordered by creation date (newest first). */
     async getForms() {
-        const rows = await this.db.all(`SELECT * FROM forms ORDER BY created_at DESC`);
+        const [rows] = await this.db.query(`SELECT * FROM forms ORDER BY created_at DESC`);
         return rows.map(row => new Form(this, row));
     }
 
@@ -102,7 +102,7 @@ class FormManager {
      * @returns {Promise<Form|null>} The form if found, otherwise null.
      */
     async getFormById(formId) {
-        const [rows] = await this.db.get(`SELECT * FROM forms WHERE id = ?`, [formId]);
+        const [rows] = await this.db.query(`SELECT * FROM forms WHERE id = ?`, [formId]);
         return rows.length ? new Form(this, rows[0]) : null;
     }
 
@@ -113,7 +113,7 @@ class FormManager {
      */
     async createForm(formData) {
         const id = formData.id || Date.now();
-        await this.db.run(`
+        const [result] = await this.db.query(`
             INSERT INTO forms (id, title, description, anonymous, max_responses, created_by) 
             VALUES (?, ?, ?, ?, ?, ?)
         `, [id, formData.title, formData.description, formData.anonymous, formData.max_responses, formData.created_by]);
@@ -144,7 +144,7 @@ class FormManager {
             if (updates.length > 0) {
                 const setClause = updates.map(([key]) => `${key} = ?`).join(", ");
                 const values = updates.map(([_, value]) => value);
-                await connection.run(`UPDATE forms SET ${setClause} WHERE id = ?`, [...values, formId]);
+                await connection.query(`UPDATE forms SET ${setClause} WHERE id = ?`, [...values, formId]);
             }
             await connection.commit();
             return this.getFormById(formId);
@@ -163,7 +163,7 @@ class FormManager {
      * @param {string} formId Form ID to delete.
      */
     async deleteForm(formId) {
-        const [result] = await this.db.run("DELETE FROM forms WHERE id = ?", [formId]);
+        const [result] = await this.db.query("DELETE FROM forms WHERE id = ?", [formId]);
         return result.affectedRows > 0; // Returns true if a row was deleted, false otherwise
     }
 
@@ -176,7 +176,7 @@ class FormManager {
      * @returns {Promise<FormQuestion[]>} All questions for the given form, ordered by creation date (oldest first).
      */
     async getFormQuestions(formId) {
-        const rows = await this.db.all("SELECT * FROM form_questions WHERE form_id = ? ORDER BY created_at ASC", [formId]);
+        const [rows] = await this.db.query("SELECT * FROM form_questions WHERE form_id = ? ORDER BY created_at ASC", [formId]);
         return rows.map(row => new FormQuestion(this, row));
     }
 
@@ -186,7 +186,7 @@ class FormManager {
      * @returns {Promise<FormQuestion|null>} The question if found, otherwise null.
      */
     async getFormQuestionById(questionId) {
-        const [rows] = await this.db.get("SELECT * FROM form_questions WHERE id = ?", [questionId]);
+        const [rows] = await this.db.query("SELECT * FROM form_questions WHERE id = ?", [questionId]);
         return rows.length ? new FormQuestion(this, rows[0]) : null;
     }
 
@@ -197,7 +197,7 @@ class FormManager {
      */
     async createFormQuestion(formId, questionData) {
         const id = questionData.id || Date.now();
-        await this.db.run(`
+        await this.db.query(`
             INSERT INTO form_questions (id, form_id, position, question, type, options, required) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [id, formId, questionData.position, questionData.question, questionData.type, JSON.stringify(questionData.options), questionData.required]);
@@ -211,7 +211,7 @@ class FormManager {
      * @returns {Promise<FormQuestion|null>} The updated question if found, otherwise null.
      */
     async updateFormQuestion(questionId, questionData) {
-        await this.db.run(`
+        await this.db.query(`
             UPDATE form_questions
             SET position = ?, question = ?, type = ?, options = ?, required = ?
             WHERE id = ?
@@ -225,7 +225,7 @@ class FormManager {
      * @returns {Promise<boolean>} True if the question was deleted, false otherwise.
      */
     async deleteFormQuestion(questionId) {
-        const [result] = await this.db.run("DELETE FROM form_questions WHERE id = ?", [questionId]);
+        const [result] = await this.db.query("DELETE FROM form_questions WHERE id = ?", [questionId]);
         return result.affectedRows > 0; // Returns true if a row was deleted, false otherwise
     }
 
@@ -238,7 +238,7 @@ class FormManager {
      * @returns 
      */
     async getFormResponses(formId) {
-        const rows = await this.db.all("SELECT * FROM forms_responses WHERE form_id = ? ORDER BY created_at DESC", [formId]);
+        const [rows] = await this.db.query("SELECT * FROM forms_responses WHERE form_id = ? ORDER BY created_at DESC", [formId]);
         return rows.map(row => new FormResponse(this, row));
     }
 
@@ -248,7 +248,7 @@ class FormManager {
      * @returns {Promise<FormResponse|null>} The form response if found, otherwise null.
      */
     async getFormResponseById(responseId) {
-        const [rows] = await this.db.get("SELECT * FROM forms_responses WHERE id = ?", [responseId]);
+        const [rows] = await this.db.query("SELECT * FROM forms_responses WHERE id = ?", [responseId]);
         return rows.length ? new FormResponse(this, rows[0]) : null;
     }
 
@@ -260,7 +260,7 @@ class FormManager {
      */
     async createFormResponse(formId, responseData) {
         const id = responseData.id || Date.now();
-        await this.db.run(`
+        await this.db.query(`
             INSERT INTO forms_responses (id, form_id, responder, response) 
             VALUES (?, ?, ?, ?)
         `, [id, formId, responseData.responder, JSON.stringify(responseData.response)]);
@@ -273,7 +273,7 @@ class FormManager {
      * @returns {Promise<boolean>} True if the response was deleted, false otherwise.
      */
     async deleteFormResponse(responseId) {
-        const [result] = await this.db.run("DELETE FROM forms_responses WHERE id = ?", [responseId]);
+        const [result] = await this.db.query("DELETE FROM forms_responses WHERE id = ?", [responseId]);
         return result.affectedRows > 0; // Returns true if a row was deleted, false otherwise
     }
 
@@ -284,7 +284,9 @@ class FormManager {
      * @returns {Promise<FormResponse[]>} All responses for the given form and responder, ordered by creation date (newest first).
      */
     async getFormResponsesByResponder(formId, responder) {
-        const rows = await this.db.all("SELECT * FROM forms_responses WHERE form_id = ? AND responder = ? ORDER BY created_at DESC", [formId, responder]);
+        const [rows] = await this.db.query("SELECT * FROM forms_responses WHERE form_id = ? AND responder = ? ORDER BY created_at DESC", [formId, responder]);
         return rows.map(row => new FormResponse(this, row));
     }
 }
+
+module.exports = { FormManager, Form, FormQuestion, FormResponse };

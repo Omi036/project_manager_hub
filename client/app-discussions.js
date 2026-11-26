@@ -161,7 +161,7 @@ function discPanel() {
 // Carga y renderiza la vista de discusión según el hash de la URL, mostrando el hilo seleccionado o la lista de discusiones.
 function renderChat(discussion) {
     if (!discussion) {
-        app.innerHTML = '<div class="empty"><h2>Discusión no encontrada</h2><button class="btn" data-backhome>Volver al inicio</button></div>';
+        setAppDOM('<div class="empty"><h2>Discusión no encontrada</h2><button class="btn" data-backhome>Volver al inicio</button></div>');
         return;
     }
 
@@ -223,28 +223,30 @@ function renderChat(discussion) {
         .join("") || '<p class="muted">Aún no hay mensajes. Escribe el primero.</p>';
 
 
-    app.innerHTML = `
-    <div class="detail">
-        <div class="dhead">
-            <h1>${esc(discussion.title)}</h1>
-            ${API.isAuthenticated && API.userCanDeleteItem(discussion) ? `<button class="btn del" data-deldisc="${discussion.id}">Eliminar hilo</button>` : ""}
-            
-            <button class="btn" data-backhome>Volver al inicio</button>
-        </div>
-        
-        <p class="muted" style="margin:0">Creada por <b>${esc(getUserByName(discussion.owner).nick)}</b> (@${esc(getUserByName(discussion.owner).username)}) el ${formatDate(discussion.created_at)}</p>
 
-        <div class="conversation_messages" id="conversation_messages">
-            ${msgs}
-        </div>
-        
-        ${API.isAuthenticated ? `<form class="message_form" id="message_form">
-            <div class="mention_suggestions" id="mention_suggestions" hidden></div>
+    setAppDOM(`
+        <div class="detail">
+            <div class="dhead">
+                <h1>${esc(discussion.title)}</h1>
+                ${API.isAuthenticated && API.userCanDeleteItem(discussion) ? `<button class="btn del" data-deldisc="${discussion.id}">Eliminar hilo</button>` : ""}
+                
+                <button class="btn" data-backhome>Volver al inicio</button>
+            </div>
             
-            <textarea id="message_text_input" rows="2" placeholder="Escribe en Markdown. Usa @usuario o #proyecto…" aria-label="Mensaje"></textarea>
-            <button type="submit" class="btn pri">Enviar</button>
-        </form>` : '<p class="muted">Inicia sesión para participar en esta discusión.</p>'}
-    </div>`;
+            <p class="muted" style="margin:0">Creada por <b>${esc(getUserByName(discussion.owner).nick)}</b> (@${esc(getUserByName(discussion.owner).username)}) el ${formatDate(discussion.created_at)}</p>
+        
+            <div class="conversation_messages" id="conversation_messages">
+                ${msgs}
+            </div>
+            
+            ${API.isAuthenticated ? `<form class="message_form" id="message_form">
+                <div class="mention_suggestions" id="mention_suggestions" hidden></div>
+                
+                <textarea id="message_text_input" rows="2" placeholder="Escribe en Markdown. Usa @usuario o #proyecto…" aria-label="Mensaje"></textarea>
+                <button type="submit" class="btn pri">Enviar</button>
+            </form>` : '<p class="muted">Inicia sesión para participar en esta discusión.</p>'}
+        </div>`
+    )
 
 
     const chatLog = $("#conversation_messages");

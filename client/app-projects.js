@@ -113,22 +113,23 @@ function renderProjects() {
 
     // Si no hay proyectos muestra un mensaje indicando que no hay proyectos y un botón para crear uno nuevo.
     if (!projectsList.length) {
-        app.innerHTML = `
-        <div class="empty">
-            <h2>${API.projectsError ? "No se pudieron cargar los proyectos" : "Aún no hay proyectos"}</h2>
-            <p>${API.projectsError ? "Comprueba la conexión e inténtalo de nuevo." : "Crea el primero para verlo aquí."}</p>
-            ${API.projectsError 
-                ? '<button class="btn pri" data-retryprojects>Reintentar</button>' 
-                : API.isAuthenticated && console.log(API.isAuthenticated)
-                    ? '<button class="btn pri" data-new>+ Crear proyecto</button>' 
-                    : ''
-            }
-        </div>`;
+        setAppDOM(`
+            <div class="empty">
+                <h2>${API.projectsError ? "No se pudieron cargar los proyectos" : "Aún no hay proyectos"}</h2>
+                <p>${API.projectsError ? "Comprueba la conexión e inténtalo de nuevo." : "Crea el primero para verlo aquí."}</p>
+                ${API.projectsError 
+                    ? '<button class="btn pri" data-retryprojects>Reintentar</button>' 
+                    : API.isAuthenticated && console.log(API.isAuthenticated)
+                        ? '<button class="btn pri" data-new>+ Crear proyecto</button>' 
+                        : ''
+                }
+            </div>`
+        )
         return;
     }
 
     // Renderiza la lista de proyectos.
-    app.innerHTML = `
+    setAppDOM(`
         <section class="panel">
             <div class="panel-head">
             <div class="panel-title">
@@ -154,7 +155,7 @@ function renderProjects() {
                 </button>`).join("") +`
             </div>
         </section>
-    `;
+    `);
 }
 
 
@@ -206,72 +207,74 @@ function renderDetail(project) {
         : '<span class="muted">Sin aportaciones</span>';
 
 
-    app.innerHTML = `
-    <div class="detail">
-        <div class="dhead">
-            ${iconBox(project)}
-            <h1>${esc(project.title)}</h1>
 
-            <div class="actw">
-                <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones del proyecto">⋯</button>
-                <div class="acts">
-                    ${API.userCanEditItem(project) ? `<button class="btn" data-edit="${project.id}">Editar</button>` : ""}
-                    ${API.userCanDeleteItem(project) ? `<button class="btn del" data-del="${project.id}">Eliminar</button>` : ""}
+    setAppDOM(`
+        <div class="detail">
+            <div class="dhead">
+                ${iconBox(project)}
+                <h1>${esc(project.title)}</h1>
+        
+                <div class="actw">
+                    <button class="btn actbtn" data-acts aria-expanded="false" aria-label="Acciones del proyecto">⋯</button>
+                    <div class="acts">
+                        ${API.userCanEditItem(project) ? `<button class="btn" data-edit="${project.id}">Editar</button>` : ""}
+                        ${API.userCanDeleteItem(project) ? `<button class="btn del" data-del="${project.id}">Eliminar</button>` : ""}
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="cols">
-            <div class="md">
-                ${project.description.trim() ? MarkdownRenderer.render(project.description) : '<p class="muted">Sin descripción.</p>'}
+        
+            <div class="cols">
+                <div class="md">
+                    ${project.description.trim() ? MarkdownRenderer.render(project.description) : '<p class="muted">Sin descripción.</p>'}
+                </div>
+        
+                <aside class="side">
+                    <section>
+                        <h3>Estado</h3>
+                        ${getProjectBadgeDom(project.status)}
+                    </section>
+        
+                    <section>
+                        <h3>Fecha de creación</h3>
+                        <b>${formatDate(project.created_at)}</b>
+                    </section>
+                    
+                    <section>
+                        <h3>Propietario</h3>
+                        <b>${esc(project.owner_name) || "—"}</b>
+                    </section>
+                    
+                    <section class="${project.tags && project.tags.length ? "" : "side-section--empty"}">
+                        <h3>Etiquetas</h3>
+                        ${tagsHtml(project.tags)}
+                    </section>
+        
+                    <section class="${project.collabs.length ? "" : "side-section--empty"}">
+                        <h3>Colaboradores</h3>
+                        <div class="chips">${chips}</div>
+                    </section>
+        
+                    <section class="${project.relations.length ? "" : "side-section--empty"}">
+                        <h3>Relaciones</h3>
+                        ${relationsHtml(project.relations)}
+                    </section>
+        
+                    <section class="${project.funding.length ? "" : "side-section--empty"}">
+                        <h3>Financiación</h3>
+                        ${fund}
+                    </section>
+                </aside>
             </div>
-
-            <aside class="side">
-                <section>
-                    <h3>Estado</h3>
-                    ${getProjectBadgeDom(project.status)}
-                </section>
-
-                <section>
-                    <h3>Fecha de creación</h3>
-                    <b>${formatDate(project.created_at)}</b>
-                </section>
-                
-                <section>
-                    <h3>Propietario</h3>
-                    <b>${esc(project.owner_name) || "—"}</b>
-                </section>
-                
-                <section class="${project.tags && project.tags.length ? "" : "side-section--empty"}">
-                    <h3>Etiquetas</h3>
-                    ${tagsHtml(project.tags)}
-                </section>
-
-                <section class="${project.collabs.length ? "" : "side-section--empty"}">
-                    <h3>Colaboradores</h3>
-                    <div class="chips">${chips}</div>
-                </section>
-
-                <section class="${project.relations.length ? "" : "side-section--empty"}">
-                    <h3>Relaciones</h3>
-                    ${relationsHtml(project.relations)}
-                </section>
-
-                <section class="${project.funding.length ? "" : "side-section--empty"}">
-                    <h3>Financiación</h3>
-                    ${fund}
-                </section>
-            </aside>
-        </div>
-
-        <section class="updates">
-            <div class="uh">
-                <h2>Updates</h2>
-                ${API.userCanEditItem(project) ? `<button class="btn pri" data-newup="${project.id}">+ Añadir update</button>` : ""}
-            </div>
-            ${updatesDom}
-        </section>
-    </div>`;
+        
+            <section class="updates">
+                <div class="uh">
+                    <h2>Updates</h2>
+                    ${API.userCanEditItem(project) ? `<button class="btn pri" data-newup="${project.id}">+ Añadir update</button>` : ""}
+                </div>
+                ${updatesDom}
+            </section>
+        </div>`
+    );
 }
 
 
@@ -285,7 +288,7 @@ function openForm(project) {
     projectDraft = project
         ? JSON.parse(JSON.stringify(project))
         : {
-            id: uid(),
+            id: "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
             title: "",
             icon: "tabler:rocket",
             icon_color: "#2d4ca3",

@@ -65,9 +65,6 @@ const updateCurrentUserAvatar = () => {
         : esc(parseInitials(user.nick));
 };
 
-// Genera un identificador único basado en la fecha y un número aleatorio.
-const uid = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-
 // Estados de los proyectos, en orden de aparición.
 const PROJECT_STATUSES = ["Ideado", "En progreso", "Finalizado", "Abortado"];
 
