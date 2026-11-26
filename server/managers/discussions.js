@@ -1,4 +1,3 @@
-const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateJsonBody, validateRequest } = require("../validation");
 
@@ -95,7 +94,7 @@ class DiscussionsManager {
      * @returns {Promise<Discussion>} The created discussion.
      */
     async createDiscussion(discussionData) {
-        const id = discussionData.id || randomUUID();
+        const id = discussionData.id || Date.now();
         await this.db.query(`
             INSERT INTO discussions (id, title, owner)
             VALUES (?, ?, ?)
@@ -171,7 +170,7 @@ class DiscussionsManager {
      * @returns {Promise<DiscussionMessage>} The created message.
      */
     async createMessage(messageData) {
-        const id = messageData.id || randomUUID();
+        const id = messageData.id || Date.now();
         await this.db.query(`
             INSERT INTO discussion_messages (id, discussion_id, author, text)
             VALUES (?, ?, ?, ?)

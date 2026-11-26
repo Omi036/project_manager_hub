@@ -1,4 +1,3 @@
-const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateJsonBody, validateRequest } = require("../validation");
 
@@ -64,7 +63,7 @@ class NewsManager {
      * @returns {Promise<News>} The created news item.
      */
     async createNews(newsData) {
-        const id = newsData.id || randomUUID();
+        const id = newsData.id || Date.now();
         await this.db.query(`
             INSERT INTO news (id, title, description, banner, created_by)
             VALUES (?, ?, COALESCE(?, ''), COALESCE(?, ''), ?)

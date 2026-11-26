@@ -1,4 +1,3 @@
-const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateJsonBody, validateRequest } = require("../validation");
 
@@ -113,7 +112,7 @@ class FormManager {
      * @returns {Promise<Form>} The newly created form.
      */
     async createForm(formData) {
-        const id = formData.id || randomUUID();
+        const id = formData.id || Date.now();
         await this.db.run(`
             INSERT INTO forms (id, title, description, anonymous, max_responses, created_by) 
             VALUES (?, ?, ?, ?, ?, ?)
@@ -197,7 +196,7 @@ class FormManager {
      * @param {Object} questionData The data for the new question.
      */
     async createFormQuestion(formId, questionData) {
-        const id = questionData.id || randomUUID();
+        const id = questionData.id || Date.now();
         await this.db.run(`
             INSERT INTO form_questions (id, form_id, position, question, type, options, required) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -260,7 +259,7 @@ class FormManager {
      * @returns {Promise<FormResponse|null>} The new form response if created, otherwise null.
      */
     async createFormResponse(formId, responseData) {
-        const id = responseData.id || randomUUID();
+        const id = responseData.id || Date.now();
         await this.db.run(`
             INSERT INTO forms_responses (id, form_id, responder, response) 
             VALUES (?, ?, ?, ?)

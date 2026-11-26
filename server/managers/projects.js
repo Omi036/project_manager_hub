@@ -1,4 +1,3 @@
-const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateJsonBody, validateRequest } = require("../validation");
 const { DiscussionsManager } = require("./discussions");
@@ -205,7 +204,7 @@ class ProjectsManager {
      * @returns {Promise<Project>} The created project.
      */
     async createProject(projectData) {
-        const id = projectData.id || randomUUID();
+        const id = projectData.id || Date.now();
         const title = this._requiredField(projectData.title, "title");
         const description = this._requiredField(projectData.description, "description");
         const ownerName = this._requiredField(projectData.owner_name, "owner_name");
@@ -557,7 +556,7 @@ class ProjectsManager {
      * @returns {Promise<ProjectUpdate>} The created project update.
      */
     async createProjectUpdate(projectId, updateData) {
-        const id = updateData.id || randomUUID();
+        const id = updateData.id || Date.now();
         const title = this._requiredField(updateData.title, "title");
         const description = this._requiredField(
             updateData.description,

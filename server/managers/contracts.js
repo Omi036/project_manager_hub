@@ -1,4 +1,3 @@
-const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { validateRequest, validateJsonBody } = require("../validation");
 
@@ -80,7 +79,7 @@ class ContractManager {
      * @returns {Promise<Contract>} The newly created contract.
      */
     async createContract(contractData) {
-        const id = contractData.id || randomUUID();
+        const id = contractData.id || Date.now();
         if(!contractData.content) {
             throw new Error("Contract content cannot be empty");
         }
@@ -147,7 +146,7 @@ class ContractManager {
      * @returns {Promise<ContractSignature>} The newly created signature.
      */
     async createContractSignature(signatureData) {
-        const id = signatureData.id || randomUUID();
+        const id = signatureData.id || Date.now();
         await this.db.query(
             `INSERT INTO contract_signatures (id, contract_id, signer)
              VALUES (?, ?, ?)`,

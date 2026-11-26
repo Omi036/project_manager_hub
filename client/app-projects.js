@@ -566,6 +566,12 @@ document.addEventListener("click", (event) => {
         const relationsInputs = document.querySelectorAll("[data-rt]");
         relationsInputs[relationsInputs.length - 1].focus();
 
+    // Elimina una entrada de relaciones del proyecto
+    } else if (hasData("delrelation")) {
+        projectDraft.relations.splice(+readData("delrelation"), 1);
+        drawRelations();
+
+
     // Redirecciona si se ha hecho click en una relacion
     } else if (hasData("related")) {
         const related_id = readData("related")
