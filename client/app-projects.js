@@ -469,6 +469,11 @@ document.addEventListener("click", (event) => {
     } else if (hasData("new")) {
         openForm();
 
+    // Redirecciona a otro enlace
+    } else if (hasData("shortcut")) {
+        const shortcut = readData("shortcut");
+        window.open(shortcut)
+
     // Reintentar la carga de proyectos desde el servidor.
     } else if (hasData("retryprojects")) {
         API.loadProjects().then(render).catch(() => render());

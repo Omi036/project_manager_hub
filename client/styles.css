@@ -357,7 +357,7 @@ input[type=color]{width:46px;height:34px;padding:2px;border:1px solid var(--line
 .search_bar{max-width:320px}
 .search_bar input{height:38px;border-radius:10px 17px 17px 17px;background:color-mix(in srgb,var(--soft) 55%,var(--surface));border:1px solid var(--line)}
 .btn{border-radius:20px}
-.btn.icon.notifications_button{position:relative}
+.btn.icon.notifications_button{display:none;position:relative}
 .dot{position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--surface)}
 .dot[hidden]{display:none}
 .user_avatar_button{display:flex;align-items:center;gap:4px;border:0;background:none;padding:0;color:var(--mute)}
